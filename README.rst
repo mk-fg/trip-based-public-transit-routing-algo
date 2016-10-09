@@ -38,6 +38,10 @@ More on the subject:
 - `OpenTripPlanner (OTP) project <http://www.opentripplanner.org/>`_ + `Bibliography.md there
   <https://github.com/opentripplanner/OpenTripPlanner/blob/master/docs/Bibliography.md>`_
 
+  Includes implementation of `RAPTOR
+  <https://www.microsoft.com/en-us/research/wp-content/uploads/2012/01/raptor_alenex.pdf>`_ -like
+  RoundBasedProfileRouter (see RepeatedRaptorProfileRouter.java and PR-1922 there).
+
 - `Graphserver project <https://github.com/graphserver/graphserver/>`_
 
 - `transit.land open GTFS transit data feeds/repository <https://transit.land/>`_
