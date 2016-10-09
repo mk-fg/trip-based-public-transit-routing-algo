@@ -33,6 +33,8 @@ Papers/docs directly related to this project:
 
 More on the subject:
 
+- `Topical github awesome-transit list-repo <https://github.com/luqmaan/awesome-transit>`_
+
 - `OpenTripPlanner (OTP) project <http://www.opentripplanner.org/>`_ + `Bibliography.md there
   <https://github.com/opentripplanner/OpenTripPlanner/blob/master/docs/Bibliography.md>`_
 
