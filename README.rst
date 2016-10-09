@@ -8,8 +8,9 @@
 Implementation of the fast graph-based transit-routing algorithm from the
 following papers:
 
-- `Trip-Based Public Transit Routing (2015) <https://arxiv.org/abs/1504.07149>`_
-- `Trip-Based Public Transit Routing Using Condensed Search Trees (2016) <https://arxiv.org/abs/1607.01299>`_
+- Trip-Based Public Transit Routing (`arXiv:1504.07149v2`_, 2015)
+- Trip-Based Public Transit Routing Using Condensed Search Trees
+  (`arXiv:1607.01299v2`_, 2016)
 
 Not focused on performance yet, more on readability and correctnes aspects
 first, i.e. to have something working.
@@ -22,11 +23,10 @@ Links
 
 Papers/docs directly related to this project:
 
-- Trip-Based Public Transit Routing (2015) -
-  `arXiv:1504.07149v2 <https://arxiv.org/abs/1504.07149>`_
+- Trip-Based Public Transit Routing (`arXiv:1504.07149v2`_, 2015)
 
-- Trip-Based Public Transit Routing Using Condensed Search Trees (2016) -
-  `arXiv:1607.01299v2 <https://arxiv.org/abs/1607.01299>`_
+- Trip-Based Public Transit Routing Using Condensed Search Trees
+  (`arXiv:1607.01299v2`_, 2016)
 
 - `General Transit Feed Specification (GTFS) format info
   <https://developers.google.com/transit/gtfs/>`_
@@ -51,3 +51,7 @@ More on the subject:
 - | `UI Design considerations for trip-planning interface (from GNOME Maps project)
     <https://wiki.gnome.org/Design/Apps/Maps/PublicTransportation/>`_
   | + `LWN scoop on GUADEC 2016 talk about it <https://lwn.net/Articles/698144/>`_
+
+
+.. _arXiv\:1504.07149v2: https://arxiv.org/abs/1504.07149
+.. _arXiv\:1607.01299v2: https://arxiv.org/abs/1607.01299
