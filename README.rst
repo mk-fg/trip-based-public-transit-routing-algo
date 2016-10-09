@@ -1,9 +1,9 @@
 ========================================
  trip-based-public-transit-routing-algo
 ========================================
-------------------------------------------
- Python implementation of TBPTR algorithm
-------------------------------------------
+---------------------------------------------------------------------------
+ Python implementation of trip-based (TB) public transit routing algorithm
+---------------------------------------------------------------------------
 
 Implementation of the fast graph-based transit-routing algorithm from the
 following papers:
