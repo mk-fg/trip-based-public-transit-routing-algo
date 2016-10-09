@@ -38,6 +38,8 @@ More on the subject:
 - `OpenTripPlanner (OTP) project <http://www.opentripplanner.org/>`_ + `Bibliography.md there
   <https://github.com/opentripplanner/OpenTripPlanner/blob/master/docs/Bibliography.md>`_
 
+- `Graphserver project <https://github.com/graphserver/graphserver/>`_
+
 - `transit.land open GTFS transit data feeds/repository <https://transit.land/>`_
 
 - `open-track project <https://github.com/open-track>`_
