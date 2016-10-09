@@ -1,0 +1,6 @@
+# Papers likely can't be distributed freely
+/doc/1504.07149v2.pdf
+/doc/1607.01299v2.pdf
+
+# Implementation job contract info, might have private info
+/doc/contract-info.txt
