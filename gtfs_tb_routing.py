@@ -3,7 +3,6 @@
 import itertools as it, operator as op, functools as ft
 from collections import namedtuple, defaultdict
 from pathlib import Path
-from math import radians, cos, sin, asin, sqrt
 import os, sys, logging, csv, math
 
 
@@ -24,13 +23,15 @@ get_logger = lambda name: LogStyleAdapter(logging.getLogger(name))
 
 
 
-class conf:
+class Conf:
 
 	dt_ch = 5*60 # fixed time-delta overhead for changing trips
 
 	stop_linger_time_default = 5*60 # used if departure-time is missing
 	footpath_dt_base = dt_ch # footpath_dt = dt_base + km / speed_kmh
 	footpath_speed_kmh = 5 / 3600
+
+conf = Conf() # XXX: placeholder
 
 
 Timetable = namedtuple('Timetable', 'stops footpaths trips')
@@ -56,7 +57,7 @@ def footpath_dt(stop_a, stop_b, math=math):
 		[stop_a.lon, stop_a.lat, stop_b.lon, stop_b.lat] )
 	km = 6367 * 2 * math.asin(math.sqrt(
 		math.sin((lat2 - lat1)/2)**2 +
-		math.cos(lat1) * cos(lat2) * math.sin((lon2 - lon1)/2)**2 ))
+		math.cos(lat1) * math.cos(lat2) * math.sin((lon2 - lon1)/2)**2 ))
 	return conf.footpath_dt_base + km / conf.footpath_speed_kmh
 
 def parse_gtfs_timetable(gtfs_dir):
@@ -67,9 +68,9 @@ def parse_gtfs_timetable(gtfs_dir):
 		(t.stop_id, Stop(t.stop_id, t.stop_name, t.stop_lon, t.stop_lat))
 		for t in iter_gtfs_tuples(gtfs_dir, 'stops') )
 
-	footpaths = dict()
-	for a, b in it.combinations(list(stops.values()), 2):
-		footpaths[frozenset([a.id, b.id])] = footpath_dt(a, b)
+	footpaths = dict(
+		(frozenset([a.id, b.id]), footpath_dt(a, b))
+		for a, b in it.combinations(list(stops.values()), 2) )
 
 	trips, trip_stops = dict(), defaultdict(list)
 	for t in iter_gtfs_tuples(gtfs_dir, 'stop_times'): trip_stops[t.trip_id].append(t)
