@@ -1,9 +1,9 @@
 ========================================
  trip-based-public-transit-routing-algo
 ========================================
----------------------------------------------------------------------------
- Python implementation of trip-based (TB) public transit routing algorithm
----------------------------------------------------------------------------
+----------------------------------------------------------------------
+ Python implementation of trip-based public transit routing algorithm
+----------------------------------------------------------------------
 
 Implementation of the fast graph-based transit-routing algorithm from the
 following papers:
@@ -47,10 +47,6 @@ More on the subject:
 - `transit.land open GTFS transit data feeds/repository <https://transit.land/>`_
 
 - `open-track project <https://github.com/open-track>`_
-
-- | `UI Design considerations for trip-planning interface (from GNOME Maps project)
-    <https://wiki.gnome.org/Design/Apps/Maps/PublicTransportation/>`_
-  | + `LWN scoop on GUADEC 2016 talk about it <https://lwn.net/Articles/698144/>`_
 
 
 .. _arXiv\:1504.07149v2: https://arxiv.org/abs/1504.07149

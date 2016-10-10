@@ -1,5 +1,6 @@
-# Papers likely can't be distributed freely
+# These likely can't be distributed freely
 /doc/papers/*
+/doc/samples/*
 
 # Implementation job contract info, might have private info
 /doc/contract-info.txt
