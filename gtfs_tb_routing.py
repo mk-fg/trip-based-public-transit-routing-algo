@@ -88,6 +88,8 @@ def parse_gtfs_timetable(gtfs_dir):
 	return Timetable(stops, footpaths, trips)
 
 
+StopLine = namedtuple('StopLine', 'stopidx line')
+
 def timetable_lines(tt):
 	# Lines - trips with identical stop sequences, ordered from earliest-to-latest by arrival time
 	# If one trip overtakes another (making ordering impossible) - split into diff line
@@ -96,35 +98,52 @@ def timetable_lines(tt):
 	line_stops = lambda trip: list(map(op.attrgetter('stop'), trip.stops))
 	for trip in tt.trips: line_trips[line_stops(a)].append(trip)
 
-	lines = list()
+	stop_lines = defaultdict(list)
 	for trips in line_trips.values():
-		lines_subgroup = list()
+		lines_for_stopseq = list()
+
+		# Split same-stops trips into non-overtaking groups
 		for a in trips:
-			for trips in lines_subgroup:
-				for b in trips:
+			for line in lines_for_stopseq:
+				for b in line:
 					overtake_check = set( # True: a ≺ b, False: b ≺ a, None: a == b
 						(None if sa.dts_arr == sb.dts_arr else sa.dts_arr <= sb.dts_arr)
-						for sa, sb in zip(a.stops, b.stops) )
-					if True in overtake_check and False in overtake_check: break # diff line
+						for sa, sb in zip(a.stops, b.stops) ).difference([None])
+					if len(overtake_check) == 1: continue # can be ordered
+					if not overtake_check: a = None # discard exact duplicates
+					break # can't be ordered - split into diff line
 				else:
-					trips.append(a)
+					line.append(a)
 					break
-			else: lines_subgroup.append([a]) # failed to find line to group trip into
-		for line in lines_subgroup:
+				if not a: break
+			else: lines_for_stopseq.append([a]) # failed to find line to group trip into
+
+		for line in lines_for_stopseq:
 			line.sort(key=lambda trip: sum(map(op.attrgetter('dts_arr'), trip.stops)))
-		lines.extend(lines_subgroup)
+			for n, ts in enumerate(line[0].stops): stop_lines[ts.stop].append(StopLine(n, line))
 
-	return lines
+	return dict(stop_lines.items())
 
+
+Transfer = namedtuple('Transfer', 'trip_a stopidx_a trip_b stopidx_b')
 
 def precalc_transfer_set(tt, lines):
-	raise NotImplementedError
-	for trip in tt.trips:
-		for p in trip[1:]:
-			for q in tt.stops.values():
-				try: dt_fp = tt.footpaths[frozenset([p, q])]
-				except KeyError: continue # unreachable on foot
-				# dt_fp
+	transfers = list()
+
+	for trip_t in tt.trips:
+		for i, stop_p in enumerate(trip_t[1:]):
+			for stop_q in tt.stops.values():
+
+				try: dt_fp_pq = tt.footpaths[frozenset([stop_p, stop_q])]
+				except KeyError: continue # p->q is impossible on foot
+				dts_q = p.dst_arr + dt_fp_pq
+
+				for j, line in lines[stop_q]:
+					for trip_u in line:
+						# XXX: do mod() for dt on comparisons to wrap-around into next day
+						if dts_q <= trip_u.stops[j].dts_dep: break
+					else: continue # all trips for L(q) have departed by dts_q
+					transfers.append(Transfer(trip_t, i, trip_u, j))
 
 
 
