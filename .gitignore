@@ -4,3 +4,7 @@
 
 # Implementation job contract info, might have private info
 /doc/contract-info.txt
+
+# Misc clutter
+/cache
+*.pyc

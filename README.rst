@@ -18,6 +18,13 @@ first, i.e. to have something working.
 Under heavy development, not really usable yet.
 
 
+Requirements
+------------
+
+- Python 3.5+
+- `attrs <https://attrs.readthedocs.io/en/stable/>`_
+
+
 Links
 -----
 
