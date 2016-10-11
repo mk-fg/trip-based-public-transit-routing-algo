@@ -6,7 +6,7 @@ from pathlib import Path
 import os, sys, logging, csv, math
 import pickle, base64, hashlib
 
-import attr
+import tb_routing as tb
 
 
 class LogMessage:
@@ -23,34 +23,6 @@ class LogStyleAdapter(logging.LoggerAdapter):
 		self.logger._log(level, LogMessage(msg, args, kws), (), log_kws)
 
 get_logger = lambda name: LogStyleAdapter(logging.getLogger(name))
-
-
-def attr_struct(cls):
-	try:
-		keys = cls.keys
-		del cls.keys
-	except AttributeError: pass
-	else:
-		if isinstance(keys, str): keys = keys.split()
-		for k in keys: setattr(cls, k, attr.ib())
-	return attr.s(cls, slots=True)
-
-@attr_struct
-class Timetable: keys = 'stops footpaths trips'
-
-@attr_struct
-class Stop: keys = 'id name lon lat'
-
-@attr_struct
-class TripStop: keys = 'stop dts_arr dts_dep'
-
-@attr_struct
-class Lines: keys = 'by_stop'
-
-@attr_struct
-class StopLine: keys = 'stopidx line'
-
-stop_pair_key = lambda a,b: '\0'.join(sorted([a.id, b.id]))
 
 
 class Conf:
@@ -77,7 +49,8 @@ def parse_gtfs_dts(ts_str):
 	return sum((mul * int(v)) for mul, v in zip([3600, 60, 1], ts_str.split(':')))
 
 def footpath_dt(stop_a, stop_b, math=math):
-	# Calculates footpath time-delta (dt) between two stops
+	'''Calculate footpath time-delta (dt) between two stops,
+		based on their lon/lat distance (using Haversine Formula) and walking-speed constant.'''
 	# Alternative: use UTM coordinates and KDTree (e.g. scipy) or spatial dbs
 	lon1, lat1, lon2, lat2 = ( math.radians(float(v)) for v in
 		[stop_a.lon, stop_a.lat, stop_b.lon, stop_b.lat] )
@@ -87,15 +60,12 @@ def footpath_dt(stop_a, stop_b, math=math):
 	return conf.footpath_dt_base + km / conf.footpath_speed_kmh
 
 def parse_gtfs_timetable(gtfs_dir):
-	# "We consider public transit networks defined by an aperiodic
-	#  timetable, consisting of a set of stops, a set of footpaths and a set of trips."
-
+	'Parse Timetable from GTFS data directory.'
 	stops = dict(
-		(t.stop_id, Stop(t.stop_id, t.stop_name, t.stop_lon, t.stop_lat))
+		(t.stop_id, tb.Stop(t.stop_id, t.stop_name, t.stop_lon, t.stop_lat))
 		for t in iter_gtfs_tuples(gtfs_dir, 'stops') )
-
 	footpaths = dict(
-		(stop_pair_key(a, b), footpath_dt(a, b))
+		(tb.stop_pair_key(a, b), footpath_dt(a, b))
 		for a, b in it.combinations(list(stops.values()), 2) )
 
 	trips, trip_stops = dict(), defaultdict(list)
@@ -112,63 +82,7 @@ def parse_gtfs_timetable(gtfs_dir):
 			if not dts_dep: dts_dep = dts_arr + conf.stop_linger_time_default
 		if trip: trips[t.trip_id] = trip
 
-	return Timetable(stops, footpaths, trips)
-
-
-def timetable_lines(tt):
-	# Lines - trips with identical stop sequences, ordered from earliest-to-latest by arrival time
-	# If one trip overtakes another (making ordering impossible) - split into diff line
-
-	line_trips = defaultdict(list)
-	line_stops = lambda trip: list(map(op.attrgetter('stop'), trip.stops))
-	for trip in tt.trips: line_trips[line_stops(a)].append(trip)
-
-	stop_lines = defaultdict(list)
-	for trips in line_trips.values():
-		lines_for_stopseq = list()
-
-		# Split same-stops trips into non-overtaking groups
-		for a in trips:
-			for line in lines_for_stopseq:
-				for b in line:
-					overtake_check = set( # True: a ≺ b, False: b ≺ a, None: a == b
-						(None if sa.dts_arr == sb.dts_arr else sa.dts_arr <= sb.dts_arr)
-						for sa, sb in zip(a.stops, b.stops) ).difference([None])
-					if len(overtake_check) == 1: continue # can be ordered
-					if not overtake_check: a = None # discard exact duplicates
-					break # can't be ordered - split into diff line
-				else:
-					line.append(a)
-					break
-				if not a: break
-			else: lines_for_stopseq.append([a]) # failed to find line to group trip into
-
-		for line in lines_for_stopseq:
-			line.sort(key=lambda trip: sum(map(op.attrgetter('dts_arr'), trip.stops)))
-			for n, ts in enumerate(line[0].stops): stop_lines[ts.stop].append(tb.StopLine(n, line))
-
-	return Lines(dict(stop_lines.items()))
-
-
-Transfer = namedtuple('Transfer', 'trip_a stopidx_a trip_b stopidx_b')
-
-def precalc_transfer_set(tt, lines):
-	transfers = list()
-
-	for trip_t in tt.trips:
-		for i, stop_p in enumerate(trip_t[1:]):
-			for stop_q in tt.stops.values():
-
-				try: dt_fp_pq = tt.footpaths[stop_pair_key(stop_p, stop_q)]
-				except KeyError: continue # p->q is impossible on foot
-				dts_q = p.dst_arr + dt_fp_pq
-
-				for j, line in lines[stop_q]:
-					for trip_u in line:
-						# XXX: do mod() for dt on comparisons to wrap-around into next day
-						if dts_q <= trip_u.stops[j].dts_dep: break
-					else: continue # all trips for L(q) have departed by dts_q
-					transfers.append(Transfer(trip_t, i, trip_u, j))
+	return tb.Timetable(stops, footpaths, trips)
 
 
 class CalculationCache:
@@ -219,7 +133,7 @@ def main(args=None):
 	c = CalculationCache(Path(opts.cache_dir), [opts.gtfs_dir])
 
 	tt = c.run(parse_gtfs_timetable, Path(opts.gtfs_dir))
-	lines = c.run(timetable_lines, tt)
-	precalc_transfer_set(tt, lines)
+	lines = c.run(tb.timetable_lines, tt)
+	router = tb.TBRoutingEngine(tt, lines)
 
 if __name__ == '__main__': sys.exit(main())
