@@ -68,7 +68,7 @@ def parse_gtfs_timetable(gtfs_dir):
 		(tb.stop_pair_key(a, b), footpath_dt(a, b))
 		for a, b in it.combinations(list(stops.values()), 2) )
 
-	trips, trip_stops = dict(), defaultdict(list)
+	trips, trip_stops = list(), defaultdict(list)
 	for t in iter_gtfs_tuples(gtfs_dir, 'stop_times'): trip_stops[t.trip_id].append(t)
 	for t in iter_gtfs_tuples(gtfs_dir, 'trips'):
 		trip = list()
@@ -80,7 +80,8 @@ def parse_gtfs_timetable(gtfs_dir):
 					else: continue
 				else: dts_arr = trip[-1].dts_dep # "scheduled based on the nearest preceding timed stop"
 			if not dts_dep: dts_dep = dts_arr + conf.stop_linger_time_default
-		if trip: trips[t.trip_id] = trip
+			trip.append(tb.TripStop(stops[ts.stop_id], dts_arr, dts_dep))
+		if trip: trips.append(trip)
 
 	return tb.Timetable(stops, footpaths, trips)
 
@@ -130,7 +131,7 @@ def main(args=None):
 	logging.basicConfig(level=logging.DEBUG if opts.debug else logging.WARNING)
 	log = get_logger('main')
 
-	c = CalculationCache(Path(opts.cache_dir), [opts.gtfs_dir])
+	c = CalculationCache(opts.cache_dir and Path(opts.cache_dir), [opts.gtfs_dir])
 
 	tt = c.run(parse_gtfs_timetable, Path(opts.gtfs_dir))
 	lines = c.run(tb.timetable_lines, tt)
