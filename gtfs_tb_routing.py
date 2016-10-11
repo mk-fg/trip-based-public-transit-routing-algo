@@ -4,6 +4,9 @@ import itertools as it, operator as op, functools as ft
 from collections import namedtuple, defaultdict
 from pathlib import Path
 import os, sys, logging, csv, math
+import pickle, base64, hashlib
+
+import attr
 
 
 class LogMessage:
@@ -22,6 +25,33 @@ class LogStyleAdapter(logging.LoggerAdapter):
 get_logger = lambda name: LogStyleAdapter(logging.getLogger(name))
 
 
+def attr_struct(cls):
+	try:
+		keys = cls.keys
+		del cls.keys
+	except AttributeError: pass
+	else:
+		if isinstance(keys, str): keys = keys.split()
+		for k in keys: setattr(cls, k, attr.ib())
+	return attr.s(cls, slots=True)
+
+@attr_struct
+class Timetable: keys = 'stops footpaths trips'
+
+@attr_struct
+class Stop: keys = 'id name lon lat'
+
+@attr_struct
+class TripStop: keys = 'stop dts_arr dts_dep'
+
+@attr_struct
+class Lines: keys = 'by_stop'
+
+@attr_struct
+class StopLine: keys = 'stopidx line'
+
+stop_pair_key = lambda a,b: '\0'.join(sorted([a.id, b.id]))
+
 
 class Conf:
 
@@ -33,10 +63,6 @@ class Conf:
 
 conf = Conf() # XXX: placeholder
 
-
-Timetable = namedtuple('Timetable', 'stops footpaths trips')
-Stop = namedtuple('Stop', 'id name lon lat')
-TripStop = namedtuple('TripStop', 'stop dts_arr dts_dep')
 
 def iter_gtfs_tuples(gtfs_dir, filename):
 	if filename.endswith('.txt'): filename = filename[:-4]
@@ -69,7 +95,7 @@ def parse_gtfs_timetable(gtfs_dir):
 		for t in iter_gtfs_tuples(gtfs_dir, 'stops') )
 
 	footpaths = dict(
-		(frozenset([a.id, b.id]), footpath_dt(a, b))
+		(stop_pair_key(a, b), footpath_dt(a, b))
 		for a, b in it.combinations(list(stops.values()), 2) )
 
 	trips, trip_stops = dict(), defaultdict(list)
@@ -88,8 +114,6 @@ def parse_gtfs_timetable(gtfs_dir):
 
 	return Timetable(stops, footpaths, trips)
 
-
-StopLine = namedtuple('StopLine', 'stopidx line')
 
 def timetable_lines(tt):
 	# Lines - trips with identical stop sequences, ordered from earliest-to-latest by arrival time
@@ -121,9 +145,9 @@ def timetable_lines(tt):
 
 		for line in lines_for_stopseq:
 			line.sort(key=lambda trip: sum(map(op.attrgetter('dts_arr'), trip.stops)))
-			for n, ts in enumerate(line[0].stops): stop_lines[ts.stop].append(StopLine(n, line))
+			for n, ts in enumerate(line[0].stops): stop_lines[ts.stop].append(tb.StopLine(n, line))
 
-	return dict(stop_lines.items())
+	return Lines(dict(stop_lines.items()))
 
 
 Transfer = namedtuple('Transfer', 'trip_a stopidx_a trip_b stopidx_b')
@@ -135,7 +159,7 @@ def precalc_transfer_set(tt, lines):
 		for i, stop_p in enumerate(trip_t[1:]):
 			for stop_q in tt.stops.values():
 
-				try: dt_fp_pq = tt.footpaths[frozenset([stop_p, stop_q])]
+				try: dt_fp_pq = tt.footpaths[stop_pair_key(stop_p, stop_q)]
 				except KeyError: continue # p->q is impossible on foot
 				dts_q = p.dst_arr + dt_fp_pq
 
@@ -147,12 +171,44 @@ def precalc_transfer_set(tt, lines):
 					transfers.append(Transfer(trip_t, i, trip_u, j))
 
 
+class CalculationCache:
+	'''Wrapper to cache calculation steps to disk.
+		Used purely for easier/faster testing of the steps that follow.'''
+
+	version = 1
+
+	@staticmethod
+	def seed_hash(val, n=6):
+		return base64.urlsafe_b64encode(
+			hashlib.sha256(repr(val).encode()).digest() ).decode()[:n]
+
+	def __init__(self, cache_dir, seed):
+		self.cache_dir, self.seed = cache_dir, self.seed_hash(seed)
+
+	def run(self, func, *args, **kws):
+		if self.cache_dir:
+			func_id = func.__module__.strip('__'), func.__name__
+			cache_file = ( self.cache_dir / ('.'.join([
+				'v{:02d}'.format(self.version), self.seed, *func_id ]) + '.json'))
+			if cache_file.exists():
+				try:
+					with cache_file.open('rb') as src: return pickle.load(src)
+				except Exception as err:
+					log.exception('Failed to process cache-file for func {}, skipping it:'
+						' {} - [{}] {}', '.'.join(func_id), cache_file.name, err.__class__.__name__, err)
+		data = func(*args, **kws)
+		if self.cache_dir:
+			with cache_file.open('wb') as dst: pickle.dump(data, dst)
+		return data
+
 
 def main(args=None):
 	import argparse
 	parser = argparse.ArgumentParser(
 		description='Simple implementation of graph-db and algos on top of that.')
 	parser.add_argument('gtfs_dir', help='Path to gtfs data directory to build graph from.')
+	parser.add_argument('-c', '--cache-dir', metavar='path',
+		help='Cache each step of calculation where that is supported to files in specified dir.')
 	parser.add_argument('-d', '--debug', action='store_true', help='Verbose operation mode.')
 	opts = parser.parse_args(sys.argv[1:] if args is None else args)
 
@@ -160,9 +216,10 @@ def main(args=None):
 	logging.basicConfig(level=logging.DEBUG if opts.debug else logging.WARNING)
 	log = get_logger('main')
 
-	tt = parse_gtfs_timetable(Path(opts.gtfs_dir))
-	lines = timetable_lines(tt)
-	transfers = precalc_transfer_set(tt, lines)
+	c = CalculationCache(Path(opts.cache_dir), [opts.gtfs_dir])
 
+	tt = c.run(parse_gtfs_timetable, Path(opts.gtfs_dir))
+	lines = c.run(timetable_lines, tt)
+	precalc_transfer_set(tt, lines)
 
 if __name__ == '__main__': sys.exit(main())
