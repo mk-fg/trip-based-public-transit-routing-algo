@@ -102,9 +102,9 @@ class CalculationCache:
 
 	def run(self, func, *args, **kws):
 		if self.cache_dir:
-			func_id = func.__module__.strip('__'), func.__name__
+			func_id = [func.__module__.strip('__'), func.__name__]
 			cache_file = ( self.cache_dir / ('.'.join([
-				'v{:02d}'.format(self.version), self.seed, *func_id ]) + '.pickle'))
+				'v{:02d}'.format(self.version), self.seed ] + func_id) + '.pickle'))
 			if cache_file.exists():
 				try:
 					with cache_file.open('rb') as src: return pickle.load(src)
