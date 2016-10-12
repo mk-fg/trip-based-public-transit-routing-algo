@@ -39,37 +39,42 @@ class CalculationCache:
 				node_parsed, node_pos[pos_sub] = True, node
 		return tree
 
+
 	def __init__(self, cache_dir, seed, invalidate=None, dep_tree_file=None):
-		self.cache_dir, self.seed = cache_dir, self.seed_hash(seed)
+		self.cache_dir = cache_dir
+		self.prefix = 'v{:02d}.{}'.format(self.version, self.seed_hash(seed))
+
 		self.invalidate, self.invalidated = invalidate or list(), set()
 		if dep_tree_file and dep_tree_file.exists():
 			with dep_tree_file.open() as src: self.dep_tree = self.parse_asciitree(src)
 		else: self.dep_tree = dict()
+
 		self.log = u.get_logger('main.cache')
 
-	def serialize(self, data, dst_file): pickle.dump(data, dst_file)
-	def unserialize(self, src_file): return pickle.load(src_file)
 
 	def cache_valid_check(self, func_id, cache_file):
 		if func_id in self.invalidated: return False
 		if any((pat in func_id) for pat in self.invalidate): return False
-		return self._cache_dep_tree_check(func_id, self.dep_tree or dict())
+		return self._cache_dep_valid_check(func_id, self.dep_tree or dict())
 
-	def _cache_dep_tree_check(self, func_id, tree, chk_str=None):
+	def _cache_dep_valid_check(self, func_id, tree, chk_str=None):
 		for pat, tree in tree.items():
 			if pat in func_id:
-				return self._cache_dep_tree_check(
+				return self._cache_dep_valid_check(
 					func_id, tree, '\0'.join(self.invalidated) )
 			elif chk_str and pat in chk_str: return False
-			self._cache_dep_tree_check(func_id, tree, chk_str=chk_str)
+			self._cache_dep_valid_check(func_id, tree, chk_str=chk_str)
 		return True
+
+
+	def serialize(self, data, dst_file): pickle.dump(data, dst_file)
+	def unserialize(self, src_file): return pickle.load(src_file)
 
 	def run(self, func, *args, **kws):
 		func_id = '.'.join([func.__module__.strip('__'), func.__name__])
 
 		if self.cache_dir:
-			cache_file = (self.cache_dir / ('.'.join([
-				'v{:02d}'.format(self.version), self.seed, func_id ]) + '.cache'))
+			cache_file = self.cache_dir / '{}.{}.cache'.format(self.prefix, func_id)
 			if cache_file.exists():
 				try:
 					if not self.cache_valid_check(func_id, cache_file): raise AssertionError
