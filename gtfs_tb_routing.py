@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 
 import itertools as it, operator as op, functools as ft
-from collections import namedtuple, defaultdict
+from collections import namedtuple, defaultdict, OrderedDict
 from pathlib import Path
 import os, sys, logging, csv, math, bisect
-import pickle, base64, hashlib
+import re, pickle, base64, hashlib
 
 import tb_routing as tb
 
@@ -26,6 +26,8 @@ get_logger = lambda name: LogStyleAdapter(logging.getLogger(name))
 
 
 class Conf:
+
+	path_dep_tree = re.sub(r'.*/([^/]+?)(\.py)?$', r'\1.cache-dep-tree', __file__)
 
 	dt_ch = 5*60 # fixed time-delta overhead for changing trips
 
@@ -102,20 +104,66 @@ class CalculationCache:
 		return base64.urlsafe_b64encode(
 			hashlib.sha256(repr(val).encode()).digest() ).decode()[:n]
 
-	def __init__(self, cache_dir, seed):
+	@staticmethod
+	def parse_asciitree(src_file):
+		tree, node_pos = OrderedDict(), dict()
+		for line in src_file:
+			if line.lstrip().startswith('#') or not line.strip(): continue
+			tokens = iter(re.finditer(r'(\|)|(\+-+)|(\S.*$)', line))
+			node_parsed = False
+			for m in tokens:
+				assert not node_parsed, line # only one node per line
+				pos, (t_next, t_leaf, val) = m.start(), m.groups()
+				if t_next:
+					assert pos in node_pos, [line, pos, node_pos]
+					continue
+				elif t_leaf:
+					m = next(tokens)
+					val, pos_sub = m.group(3), m.start()
+				elif val:# root
+					assert not tree, line
+					pos_sub = 1
+				parent = node_pos[pos] if pos else tree
+				node = parent[val] = dict()
+				node_parsed, node_pos[pos_sub] = True, node
+		return tree
+
+	def __init__(self, cache_dir, seed, skip=None, dep_tree_file=None):
 		self.cache_dir, self.seed = cache_dir, self.seed_hash(seed)
+		self.skip, self.invalidated = skip or list(), set()
+		if dep_tree_file and dep_tree_file.exists():
+			with dep_tree_file.open() as src: self.dep_tree = self.parse_asciitree(src)
+		else: self.dep_tree = dict()
+
+	def cache_valid_check(self, func_id, cache_file):
+		if func_id in self.invalidated: return False
+		if any((pat in func_id) for pat in self.skip): return False
+		return self._cache_dep_tree_check(func_id, self.dep_tree or dict())
+
+	def _cache_dep_tree_check(self, func_id, tree, chk_str=None):
+		for pat, tree in tree.items():
+			if pat in func_id:
+				return self._cache_dep_tree_check(
+					func_id, tree, '\0'.join(self.invalidated) )
+			elif chk_str and pat in chk_str: return False
+			self._cache_dep_tree_check(func_id, tree, chk_str=chk_str)
+		return True
 
 	def run(self, func, *args, **kws):
+		func_id = '.'.join([func.__module__.strip('__'), func.__name__])
 		if self.cache_dir:
-			func_id = [func.__module__.strip('__'), func.__name__]
-			cache_file = ( self.cache_dir / ('.'.join([
-				'v{:02d}'.format(self.version), self.seed ] + func_id) + '.pickle'))
+			cache_file = (self.cache_dir / ('.'.join([
+				'v{:02d}'.format(self.version), self.seed, func_id ]) + '.pickle'))
 			if cache_file.exists():
 				try:
+					if not self.cache_valid_check(func_id, cache_file): raise AssertionError
 					with cache_file.open('rb') as src: return pickle.load(src)
+				except AssertionError as err:
+					log.debug('Skipping invalidated cache for func {}: {}', func_id, cache_file.name)
 				except Exception as err:
-					log.exception('Failed to process cache-file for func {}, skipping it:'
-						' {} - [{}] {}', '.'.join(func_id), cache_file.name, err.__class__.__name__, err)
+					log.exception( 'Failed to process cache-file for func {}, skipping it:'
+						' {} - [{}] {}', func_id, cache_file.name, err.__class__.__name__, err )
+		self.invalidated.add(func_id)
 		data = func(*args, **kws)
 		if self.cache_dir:
 			with cache_file.open('wb') as dst: pickle.dump(data, dst)
@@ -127,16 +175,31 @@ def main(args=None):
 	parser = argparse.ArgumentParser(
 		description='Simple implementation of graph-db and algos on top of that.')
 	parser.add_argument('gtfs_dir', help='Path to gtfs data directory to build graph from.')
-	parser.add_argument('-c', '--cache-dir', metavar='path',
-		help='Cache each step of calculation where that is supported to files in specified dir.')
 	parser.add_argument('-d', '--debug', action='store_true', help='Verbose operation mode.')
+
+	group = parser.add_argument_group('Caching options')
+	group.add_argument('-c', '--cache-dir', metavar='path',
+		help='Cache each step of calculation where that is supported to files in specified dir.')
+	group.add_argument('-s', '--cache-skip', metavar='pattern',
+		help='Module/function name(s) (space-separated) to'
+				' auto-invalidate any existing cached data for.'
+			' Matched against "<module-name>.<func-name>" as a simple substring.')
+	group.add_argument('-t', '--cache-dep-tree',
+		metavar='path', default=conf.path_dep_tree,
+		help='Cache dependency tree - i.e. which cached'
+				' calculation depends on which, in asciitree.LeftAligned format.'
+			' Default is to look it up in following file (if exists): %(default)s')
+
 	opts = parser.parse_args(sys.argv[1:] if args is None else args)
 
 	global log
 	logging.basicConfig(level=logging.DEBUG if opts.debug else logging.WARNING)
 	log = get_logger('main')
 
-	c = CalculationCache(opts.cache_dir and Path(opts.cache_dir), [opts.gtfs_dir])
+	c = CalculationCache(
+		opts.cache_dir and Path(opts.cache_dir), [opts.gtfs_dir],
+		skip=opts.cache_skip and opts.cache_skip.split(),
+		dep_tree_file=Path(opts.cache_dep_tree) )
 
 	tt = c.run(parse_gtfs_timetable, Path(opts.gtfs_dir))
 	lines = c.run(tb.timetable_lines, tt)
