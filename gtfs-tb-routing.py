@@ -105,7 +105,7 @@ def main(args=None):
 
 	cache = tb.cache.CalculationCache(
 		opts.cache_dir and Path(opts.cache_dir), [opts.gtfs_dir],
-		skip=opts.cache_skip and opts.cache_skip.split(),
+		invalidate=opts.cache_skip and opts.cache_skip.split(),
 		dep_tree_file=Path(opts.cache_dep_tree) )
 
 	timetable = cache.run(parse_gtfs_timetable, Path(opts.gtfs_dir))

@@ -39,9 +39,9 @@ class CalculationCache:
 				node_parsed, node_pos[pos_sub] = True, node
 		return tree
 
-	def __init__(self, cache_dir, seed, skip=None, dep_tree_file=None):
+	def __init__(self, cache_dir, seed, invalidate=None, dep_tree_file=None):
 		self.cache_dir, self.seed = cache_dir, self.seed_hash(seed)
-		self.skip, self.invalidated = skip or list(), set()
+		self.invalidate, self.invalidated = invalidate or list(), set()
 		if dep_tree_file and dep_tree_file.exists():
 			with dep_tree_file.open() as src: self.dep_tree = self.parse_asciitree(src)
 		else: self.dep_tree = dict()
@@ -52,7 +52,7 @@ class CalculationCache:
 
 	def cache_valid_check(self, func_id, cache_file):
 		if func_id in self.invalidated: return False
-		if any((pat in func_id) for pat in self.skip): return False
+		if any((pat in func_id) for pat in self.invalidate): return False
 		return self._cache_dep_tree_check(func_id, self.dep_tree or dict())
 
 	def _cache_dep_tree_check(self, func_id, tree, chk_str=None):
