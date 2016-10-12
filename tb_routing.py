@@ -111,8 +111,7 @@ class TBRoutingEngine:
 
 			for line in lines_for_stopseq:
 				line.sort(key=lambda trip: sum(map(op.attrgetter('dts_arr'), trip)))
-				for n, ts in enumerate(line[0]):
-					stop_lines[ts.stop].append(StopLine(n, line))
+				for n, ts in enumerate(line[0]): stop_lines[ts.stop.id].append(StopLine(n, line))
 
 		return dict(stop_lines.items())
 
@@ -129,7 +128,7 @@ class TBRoutingEngine:
 					except KeyError: continue # p->q is impossible on foot
 					dts_q = ts_p.dts_arr + dt_fp_pq
 
-					for j, line in map(attr.astuple, lines[stop_q]):
+					for j, line in map(attr.astuple, lines[stop_q.id]):
 						for trip_u in line:
 							# XXX: do mod() for dt on comparisons to wrap-around into next day
 							if dts_q <= trip_u[j].dts_dep: break

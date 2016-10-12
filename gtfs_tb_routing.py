@@ -4,7 +4,7 @@ import itertools as it, operator as op, functools as ft
 from collections import namedtuple, defaultdict, OrderedDict
 from pathlib import Path
 import os, sys, csv, math, bisect
-import re, pickle, base64, hashlib, time
+import re, json, base64, hashlib, time
 
 import tb_routing as tb
 
@@ -120,6 +120,36 @@ class CalculationCache:
 		else: self.dep_tree = dict()
 		self.log = tb.get_logger('main.cache')
 
+	def _serialize_obj(self, obj):
+		if tb.attr.has(obj):
+			return (
+				'__tb_attr', obj.__class__.__name__,
+				tb.attr.astuple(obj, recurse=False) )
+		raise TypeError
+
+	def _unserialize_obj(self, obj, check=False):
+		result = lambda obj, chk: obj if not check else (obj, chk)
+		if not obj: return result(obj, False)
+		if isinstance(obj, list):
+			if obj[0] == '__tb_attr':
+				return result(getattr(tb, obj[1])(
+					*map(self._unserialize_obj, obj[2]) ), True)
+			_, chk = self._unserialize_obj(obj[0], True)
+			if not chk: return result(obj, False)
+			return result(list(map(self._unserialize_obj, obj)), True)
+		elif isinstance(obj, dict):
+			_, chk = self._unserialize_obj(next(iter(obj.values())), True)
+			if not chk: return result(obj, False)
+			return result(dict(zip( obj.keys(),
+				map(self._unserialize_obj, obj.values()) )), True)
+		else: return result(obj, False)
+
+	def serialize(self, data, dst_file):
+		json.dump(data, dst_file, default=self._serialize_obj)
+
+	def unserialize(self, src_file):
+		return self._unserialize_obj(json.load(src_file))
+
 	def cache_valid_check(self, func_id, cache_file):
 		if func_id in self.invalidated: return False
 		if any((pat in func_id) for pat in self.skip): return False
@@ -139,18 +169,21 @@ class CalculationCache:
 
 		if self.cache_dir:
 			cache_file = (self.cache_dir / ('.'.join([
-				'v{:02d}'.format(self.version), self.seed, func_id ]) + '.pickle'))
+				'v{:02d}'.format(self.version), self.seed, func_id ]) + '.cache'))
 			if cache_file.exists():
 				try:
 					if not self.cache_valid_check(func_id, cache_file): raise AssertionError
-					with cache_file.open('rb') as src: data = pickle.load(src)
+					with cache_file.open('r') as src:
+						cache_td = time.monotonic()
+						data = self.unserialize(src)
+						cache_td = time.monotonic() - cache_td
 				except AssertionError as err:
 					self.log.debug('[{}] Invalidated cache: {}', func_id, cache_file.name)
 				except Exception as err:
 					self.log.exception( '[{}] Failed to process cache-file,'
 						' skipping it: {} - [{}] {}', func_id, cache_file.name, err.__class__.__name__, err )
 				else:
-					self.log.debug('[{}] Returning cached result', func_id)
+					self.log.debug('[{}] Returning cached result (loaded in {:.1f}s)', func_id, cache_td)
 					return data
 		self.invalidated.add(func_id)
 
@@ -161,7 +194,11 @@ class CalculationCache:
 		self.log.debug('[{}] Finished in: {:.1f}s', func_id, func_td)
 
 		if self.cache_dir:
-			with cache_file.open('wb') as dst: pickle.dump(data, dst)
+			with cache_file.open('w') as dst:
+				cache_td = time.monotonic()
+				self.serialize(data, dst)
+				cache_td = time.monotonic() - cache_td
+				self.log.debug('[{}] Stored cache result (took {:.1f}s)', func_id, cache_td)
 		return data
 
 
