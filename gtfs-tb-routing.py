@@ -95,6 +95,8 @@ def main(args=None):
 		help='Cache dependency tree - i.e. which cached'
 				' calculation depends on which, in asciitree.LeftAligned format.'
 			' Default is to look it up in following file (if exists): %(default)s')
+	group.add_argument('-l', '--cache-lazy', action='store_true',
+		help='Skip loading cached data for dependencies of stuff that is also cached.')
 
 	opts = parser.parse_args(sys.argv[1:] if args is None else args)
 
@@ -106,7 +108,7 @@ def main(args=None):
 	cache = tb.cache.CalculationCache(
 		opts.cache_dir and Path(opts.cache_dir), [opts.gtfs_dir],
 		invalidate=opts.cache_skip and opts.cache_skip.split(),
-		dep_tree_file=Path(opts.cache_dep_tree) )
+		dep_tree_file=Path(opts.cache_dep_tree), lazy=opts.cache_lazy )
 
 	timetable = cache.run(parse_gtfs_timetable, Path(opts.gtfs_dir))
 	router = tb.engine.TBRoutingEngine(timetable, cache=cache)
