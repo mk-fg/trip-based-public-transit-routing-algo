@@ -1,62 +1,7 @@
 import itertools as it, operator as op, functools as ft
 from collections import defaultdict
-import logging
 
-import attr
-
-
-### Misc helpers/boilerplate
-
-class LogMessage:
-	def __init__(self, fmt, a, k): self.fmt, self.a, self.k = fmt, a, k
-	def __str__(self): return self.fmt.format(*self.a, **self.k) if self.a or self.k else self.fmt
-
-class LogStyleAdapter(logging.LoggerAdapter):
-	def __init__(self, logger, extra=None):
-		super(LogStyleAdapter, self).__init__(logger, extra or {})
-	def log(self, level, msg, *args, **kws):
-		if not self.isEnabledFor(level): return
-		log_kws = {} if 'exc_info' not in kws else dict(exc_info=kws.pop('exc_info'))
-		msg, kws = self.process(msg, kws)
-		self.logger._log(level, LogMessage(msg, args, kws), (), log_kws)
-
-get_logger = lambda name: LogStyleAdapter(logging.getLogger(name))
-
-def attr_struct(cls):
-	try:
-		keys = cls.keys
-		del cls.keys
-	except AttributeError: pass
-	else:
-		if isinstance(keys, str): keys = keys.split()
-		for k in keys: setattr(cls, k, attr.ib())
-	return attr.s(cls, slots=True)
-
-
-### TBRoutingEngine input data
-
-# "We consider public transit networks defined by an aperiodic
-#  timetable, consisting of a set of stops, a set of footpaths and a set of trips."
-
-@attr_struct
-class Timetable: keys = 'stops footpaths trips'
-
-@attr_struct
-class Stop: keys = 'id name lon lat'
-
-@attr_struct
-class TripStop: keys = 'stop dts_arr dts_dep'
-
-stop_pair_key = lambda a,b: '\0'.join(sorted([a.id, b.id]))
-
-
-### Routing engine
-
-@attr_struct
-class StopLine: keys = 'stopidx line'
-
-@attr_struct
-class Transfer: keys = 'trip_a stopidx_a trip_b stopidx_b'
+from . import utils as u, types as t
 
 
 class TBRoutingEngine:
@@ -64,7 +9,7 @@ class TBRoutingEngine:
 	def __init__(self, timetable, cache=None):
 		'''Creates Trip-Based Routing Engine from Timetable data.'''
 		self.cache_wrapper = cache.run if cache else lambda f,*a,**kw: func(*a,**kw)
-		self.log = get_logger('tb')
+		self.log = u.get_logger('tb')
 
 		lines = self.run(self.timetable_lines, timetable)
 		transfers = self.run(self.precalc_transfer_set, timetable, lines)
@@ -111,7 +56,7 @@ class TBRoutingEngine:
 
 			for line in lines_for_stopseq:
 				line.sort(key=lambda trip: sum(map(op.attrgetter('dts_arr'), trip)))
-				for n, ts in enumerate(line[0]): stop_lines[ts.stop.id].append(StopLine(n, line))
+				for n, ts in enumerate(line[0]): stop_lines[ts.stop.id].append((n, line))
 
 		return dict(stop_lines.items())
 
@@ -124,11 +69,11 @@ class TBRoutingEngine:
 			for i, ts_p in enumerate(trip_t[1:]):
 				for stop_q in tt.stops.values():
 
-					try: dt_fp_pq = tt.footpaths[stop_pair_key(ts_p.stop, stop_q)]
+					try: dt_fp_pq = tt.footpaths[t.stop_pair_key(ts_p.stop, stop_q)]
 					except KeyError: continue # p->q is impossible on foot
 					dts_q = ts_p.dts_arr + dt_fp_pq
 
-					for j, line in map(attr.astuple, lines[stop_q.id]):
+					for j, line in lines[stop_q.id]:
 						for trip_u in line:
 							# XXX: do mod() for dt on comparisons to wrap-around into next day
 							if dts_q <= trip_u[j].dts_dep: break

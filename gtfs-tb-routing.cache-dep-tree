@@ -5,4 +5,5 @@
 
 precalc_transfer_set
  +-- timetable_lines
-     +-- parse_gtfs_timetable
+ |   +-- gtfs_timetable
+ +-- gtfs_timetable
