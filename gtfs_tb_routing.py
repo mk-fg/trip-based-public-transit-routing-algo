@@ -3,26 +3,10 @@
 import itertools as it, operator as op, functools as ft
 from collections import namedtuple, defaultdict, OrderedDict
 from pathlib import Path
-import os, sys, logging, csv, math, bisect
-import re, pickle, base64, hashlib
+import os, sys, csv, math, bisect
+import re, pickle, base64, hashlib, time
 
 import tb_routing as tb
-
-
-class LogMessage:
-	def __init__(self, fmt, a, k): self.fmt, self.a, self.k = fmt, a, k
-	def __str__(self): return self.fmt.format(*self.a, **self.k) if self.a or self.k else self.fmt
-
-class LogStyleAdapter(logging.LoggerAdapter):
-	def __init__(self, logger, extra=None):
-		super(LogStyleAdapter, self).__init__(logger, extra or {})
-	def log(self, level, msg, *args, **kws):
-		if not self.isEnabledFor(level): return
-		log_kws = {} if 'exc_info' not in kws else dict(exc_info=kws.pop('exc_info'))
-		msg, kws = self.process(msg, kws)
-		self.logger._log(level, LogMessage(msg, args, kws), (), log_kws)
-
-get_logger = lambda name: LogStyleAdapter(logging.getLogger(name))
 
 
 class Conf:
@@ -134,6 +118,7 @@ class CalculationCache:
 		if dep_tree_file and dep_tree_file.exists():
 			with dep_tree_file.open() as src: self.dep_tree = self.parse_asciitree(src)
 		else: self.dep_tree = dict()
+		self.log = tb.get_logger('main.cache')
 
 	def cache_valid_check(self, func_id, cache_file):
 		if func_id in self.invalidated: return False
@@ -151,20 +136,30 @@ class CalculationCache:
 
 	def run(self, func, *args, **kws):
 		func_id = '.'.join([func.__module__.strip('__'), func.__name__])
+
 		if self.cache_dir:
 			cache_file = (self.cache_dir / ('.'.join([
 				'v{:02d}'.format(self.version), self.seed, func_id ]) + '.pickle'))
 			if cache_file.exists():
 				try:
 					if not self.cache_valid_check(func_id, cache_file): raise AssertionError
-					with cache_file.open('rb') as src: return pickle.load(src)
+					with cache_file.open('rb') as src: data = pickle.load(src)
 				except AssertionError as err:
-					log.debug('Skipping invalidated cache for func {}: {}', func_id, cache_file.name)
+					self.log.debug('[{}] Invalidated cache: {}', func_id, cache_file.name)
 				except Exception as err:
-					log.exception( 'Failed to process cache-file for func {}, skipping it:'
-						' {} - [{}] {}', func_id, cache_file.name, err.__class__.__name__, err )
+					self.log.exception( '[{}] Failed to process cache-file,'
+						' skipping it: {} - [{}] {}', func_id, cache_file.name, err.__class__.__name__, err )
+				else:
+					self.log.debug('[{}] Returning cached result', func_id)
+					return data
 		self.invalidated.add(func_id)
+
+		self.log.debug('[{}] Starting...', func_id)
+		func_td = time.monotonic()
 		data = func(*args, **kws)
+		func_td = time.monotonic() - func_td
+		self.log.debug('[{}] Finished in: {:.1f}s', func_id, func_td)
+
 		if self.cache_dir:
 			with cache_file.open('wb') as dst: pickle.dump(data, dst)
 		return data
@@ -193,16 +188,16 @@ def main(args=None):
 	opts = parser.parse_args(sys.argv[1:] if args is None else args)
 
 	global log
-	logging.basicConfig(level=logging.DEBUG if opts.debug else logging.WARNING)
-	log = get_logger('main')
+	tb.logging.basicConfig(
+		level=tb.logging.DEBUG if opts.debug else tb.logging.WARNING )
+	log = tb.get_logger('main')
 
-	c = CalculationCache(
+	cache = CalculationCache(
 		opts.cache_dir and Path(opts.cache_dir), [opts.gtfs_dir],
 		skip=opts.cache_skip and opts.cache_skip.split(),
 		dep_tree_file=Path(opts.cache_dep_tree) )
 
-	tt = c.run(parse_gtfs_timetable, Path(opts.gtfs_dir))
-	lines = c.run(tb.timetable_lines, tt)
-	router = tb.TBRoutingEngine(tt, lines)
+	timetable = cache.run(parse_gtfs_timetable, Path(opts.gtfs_dir))
+	router = tb.TBRoutingEngine(timetable, cache=cache)
 
 if __name__ == '__main__': sys.exit(main())
