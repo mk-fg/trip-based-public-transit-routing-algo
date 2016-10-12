@@ -3,6 +3,6 @@
 #  all higher-level stuff is automatically invalidated.
 # Format is asciitree.LeftAligned.
 
-parse_gtfs_timetable
+precalc_transfer_set
  +-- timetable_lines
-     +-- precalc_transfer_set
+     +-- parse_gtfs_timetable
