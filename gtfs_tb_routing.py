@@ -3,7 +3,7 @@
 import itertools as it, operator as op, functools as ft
 from collections import namedtuple, defaultdict
 from pathlib import Path
-import os, sys, logging, csv, math
+import os, sys, logging, csv, math, bisect
 import pickle, base64, hashlib
 
 import tb_routing as tb
@@ -30,8 +30,9 @@ class Conf:
 	dt_ch = 5*60 # fixed time-delta overhead for changing trips
 
 	stop_linger_time_default = 5*60 # used if departure-time is missing
-	footpath_dt_base = dt_ch # footpath_dt = dt_base + km / speed_kmh
+	footpath_dt_base = 1*60 # footpath_dt = dt_base + km / speed_kmh
 	footpath_speed_kmh = 5 / 3600
+	footpath_dt_max = 20*60 # all footpaths longer than that are discarded as invalid
 
 conf = Conf() # XXX: placeholder
 
@@ -52,7 +53,8 @@ def footpath_dt(stop_a, stop_b, math=math):
 	'''Calculate footpath time-delta (dt) between two stops,
 		based on their lon/lat distance (using Haversine Formula) and walking-speed constant.'''
 	# Alternative: use UTM coordinates and KDTree (e.g. scipy) or spatial dbs
-	lon1, lat1, lon2, lat2 = ( math.radians(float(v)) for v in
+	lon1, lat1, lon2, lat2 = (
+		math.radians(float(v)) for v in
 		[stop_a.lon, stop_a.lat, stop_b.lon, stop_b.lat] )
 	km = 6367 * 2 * math.asin(math.sqrt(
 		math.sin((lat2 - lat1)/2)**2 +
@@ -64,9 +66,12 @@ def parse_gtfs_timetable(gtfs_dir):
 	stops = dict(
 		(t.stop_id, tb.Stop(t.stop_id, t.stop_name, t.stop_lon, t.stop_lat))
 		for t in iter_gtfs_tuples(gtfs_dir, 'stops') )
-	footpaths = dict(
-		(tb.stop_pair_key(a, b), footpath_dt(a, b))
+
+	footpaths = sorted(
+		(footpath_dt(a, b), tb.stop_pair_key(a, b))
 		for a, b in it.combinations(list(stops.values()), 2) )
+	n = bisect.bisect_left(footpaths, (conf.footpath_dt_max, ''))
+	footpaths = dict((k,v) for v,k in footpaths[:n])
 
 	trips, trip_stops = list(), defaultdict(list)
 	for t in iter_gtfs_tuples(gtfs_dir, 'stop_times'): trip_stops[t.trip_id].append(t)
