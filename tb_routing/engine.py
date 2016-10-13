@@ -121,7 +121,14 @@ class TBRoutingEngine:
 				return True
 			return False
 
+		track_reports = 30
+		track_n, track_diff = 0, int(len(tt.trips) / track_reports)
 		for trip in tt.trips:
+			track_n += 1
+			if track_n % track_diff == 0:
+				self.log.debug( '[pre_reduction] Progress'
+					' update: {} / {} done', track_n // track_diff, track_reports )
+
 			for i in range(len(trip)-1, 0, -1): # first stop is skipped here as well
 				ts_p = trip[i]
 				set_min(stop_arr, ts_p.stop.id, ts_p.dts_arr)
