@@ -71,10 +71,11 @@ def parse_gtfs_timetable(gtfs_dir):
 	footpaths = types.Footpaths()
 	for stop_a, stop_b in it.combinations(list(stops), 2):
 		footpaths.add(stop_a, stop_b, footpath_dt(stop_a, stop_b))
+	footpaths.discard_longer(conf.footpath_dt_max)
 
 	log.debug(
-		'Parsed timetable: stops={} footpaths={} trips={} trip_stops={}',
-		len(stops), len(footpaths), len(trips), len(trip_stops) )
+		'Parsed timetable: stops={}, footpaths={} (mean_dt={:.1f}s), trips={} (mean_stops={:.1f})',
+		len(stops), len(footpaths), footpaths.mean_dt(), len(trips), trips.mean_stops() )
 	return types.Timetable(stops, footpaths, trips)
 
 

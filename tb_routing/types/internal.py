@@ -59,7 +59,7 @@ class TransferSet:
 
 	def from_trip_stop(self, trip, stopidx):
 		k1 = self._trip_stop_key(trip, stopidx)
-		for k2, transfer in self.set_idx[k1].items(): yield (k1, k2), transfer
+		for k2, transfer in self.set_idx.get(k1, dict()).items(): yield (k1, k2), transfer
 
 	def __len__(self): return sum(map(len, self.set_idx.values()))
 	def __iter__(self):

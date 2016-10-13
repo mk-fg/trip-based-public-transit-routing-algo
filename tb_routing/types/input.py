@@ -38,6 +38,9 @@ class Footpaths:
 		n = bisect.bisect_left(items, (dt_max, ''))
 		for v,k in items[n:]: del self.set_idx[k]
 
+	def mean_dt(self):
+		return sum(self.set_idx.values()) / len(self.set_idx)
+
 	def __getitem__(self, stop_tuple):
 		return self.set_idx[self._stop_pair_key(*stop_tuple)]
 
@@ -59,7 +62,11 @@ class Trip:
 	def __iter__(self): return iter(self.stops)
 
 class Trips(UserList):
+
 	def add(self, trip): self.append(trip)
+
+	def mean_stops(self):
+		return sum(len(t.stops) for t in self) / len(self)
 
 
 @u.attr_struct
