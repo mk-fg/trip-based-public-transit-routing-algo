@@ -111,6 +111,6 @@ def main(args=None):
 		dep_tree_file=Path(opts.cache_dep_tree), lazy=opts.cache_lazy )
 
 	timetable = cache.run(parse_gtfs_timetable, Path(opts.gtfs_dir))
-	router = tb.engine.TBRoutingEngine(timetable, cache=cache)
+	router = tb.engine.TBRoutingEngine(conf, timetable, cache=cache)
 
 if __name__ == '__main__': sys.exit(main())

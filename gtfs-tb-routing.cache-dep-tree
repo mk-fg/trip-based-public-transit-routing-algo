@@ -4,6 +4,10 @@
 # Format is asciitree.LeftAligned.
 
 precalc_transfer_set
- +-- timetable_lines
- |   +-- gtfs_timetable
+ +-- pre_reduction
+ |   +-- pre_remove_u_turns
+ |       +-- pre_initial_set
+ |           +-- timetable_lines
+ |           |   +-- gtfs_timetable
+ |           +-- gtfs_timetable
  +-- gtfs_timetable

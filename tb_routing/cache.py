@@ -69,6 +69,7 @@ class CalculationCache:
 			if not self.lazy_skip: return False
 			chk = '\0'.join(self.lazy_skip)
 		if tree is None: tree = self.dep_tree
+		if not tree: return # reached leaf without finding func_id
 		res_set = set()
 		for pat, tree in tree.items():
 			if chk is True:
