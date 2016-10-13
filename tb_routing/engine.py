@@ -29,18 +29,19 @@ class TBRoutingEngine:
 	def progress_iter(self, prefix, n_max, steps=30, n=0):
 		'Progress logging helper coroutine for long calculations.'
 		steps = min(n_max, steps)
-		step_n = n_max // steps
+		step_n = n_max / steps
+		msg_tpl = '[{{}}] Step {{:>{0}.0f}} / {{:{0}d}}{{}}'.format(len(str(steps)))
 		while True:
 			dn_msg = yield
 			if isinstance(dn_msg, tuple): dn, msg = dn_msg
 			elif isinstance(dn_msg, int): dn, msg = dn_msg, None
 			else: dn, msg = 1, dn_msg
 			n += dn
-			if n == dn or n % step_n == 0:
+			if n == dn or n % step_n < 1:
 				if msg:
 					if not isinstance(msg, str): msg = msg[0].format(*msg[1:])
 					msg = ': {}'.format(msg)
-				self.log.debug('[{}] Step {} / {}{}', prefix, n // step_n, steps, msg or '')
+				self.log.debug(msg_tpl, prefix, n / step_n, steps, msg or '')
 
 
 	@timer
@@ -171,5 +172,5 @@ class TBRoutingEngine:
 				transfers.discard(transfers_discard)
 				discarded_n += len(transfers_discard)
 
-		self.log.debug('Discarded no-improvement transfers: {:,}', len(transfers_discard))
+		self.log.debug('Discarded no-improvement transfers: {:,}', discarded_n)
 		return transfers
