@@ -3,7 +3,7 @@
 import itertools as it, operator as op, functools as ft
 from collections import namedtuple, defaultdict
 from pathlib import Path
-import os, sys, re, csv, math
+import os, sys, re, csv, math, time
 
 import tb_routing as tb
 
@@ -77,6 +77,15 @@ def parse_gtfs_timetable(gtfs_dir):
 	return types.Timetable(stops, footpaths, trips)
 
 
+def calc_timer(func, *args, log=tb.u.get_logger('timer'), **kws):
+	func_id = '.'.join([func.__module__.strip('__'), func.__name__])
+	log.debug('[{}] Starting...', func_id)
+	td = time.monotonic()
+	data = func(*args, **kws)
+	td = time.monotonic() - td
+	log.debug('[{}] Finished in: {:.1f}s', func_id, td)
+	return data
+
 def main(args=None):
 	import argparse
 	parser = argparse.ArgumentParser(
@@ -93,7 +102,7 @@ def main(args=None):
 		level=tb.u.logging.DEBUG if opts.debug else tb.u.logging.WARNING )
 	log = tb.u.get_logger('main')
 
-	timetable = parse_gtfs_timetable(Path(opts.gtfs_dir))
-	router = tb.engine.TBRoutingEngine(timetable)
+	timetable = calc_timer(parse_gtfs_timetable, Path(opts.gtfs_dir))
+	router = tb.engine.TBRoutingEngine(timetable, timer=calc_timer)
 
 if __name__ == '__main__': sys.exit(main())

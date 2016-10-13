@@ -20,7 +20,8 @@ class LogStyleAdapter(logging.LoggerAdapter):
 get_logger = lambda name: LogStyleAdapter(logging.getLogger(name))
 
 
-def attr_struct(cls):
+def attr_struct(cls=None, **kws):
+	if not cls: return ft.partial(attr_struct, **kws)
 	try:
 		keys = cls.keys
 		del cls.keys

@@ -36,7 +36,7 @@ class Lines:
 		for n, line in self.set_idx.values(): yield line
 
 
-@u.attr_struct
+@u.attr_struct(slots=True)
 class Transfer: keys = 'trip_from stopidx_from trip_to stopidx_to'
 
 class TransferSet:

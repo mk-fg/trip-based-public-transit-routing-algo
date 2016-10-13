@@ -11,7 +11,7 @@ from .. import utils as u
 #  timetable, consisting of a set of stops, a set of footpaths and a set of trips."
 
 
-@u.attr_struct
+@u.attr_struct(slots=True)
 class Stop: keys = 'id name lon lat'
 
 class Stops:
@@ -38,14 +38,14 @@ class Footpaths:
 		n = bisect.bisect_left(items, (dt_max, ''))
 		for v,k in items[n:]: del self.set_idx[k]
 
-	def __getitem__(self, stop_a, stop_b):
-		return self.set_idx[stop_pair_key(stop_a, stop_b)]
+	def __getitem__(self, stop_tuple):
+		return self.set_idx[self.stop_pair_key(*stop_tuple)]
 
 	def __len__(self): return len(self.set_idx)
 	def __iter__(self): return iter(self.set_idx.items())
 
 
-@u.attr_struct
+@u.attr_struct(slots=True)
 class TripStop:
 	stop = u.attr_init()
 	dts_arr = u.attr_init()

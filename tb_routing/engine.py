@@ -8,9 +8,10 @@ class TBRoutingEngine:
 
 	dt_ch = 5*60 # fixed time-delta overhead for changing trips
 
-	def __init__(self, timetable):
+	def __init__(self, timetable, timer=None):
 		'''Creates Trip-Based Routing Engine from Timetable data.'''
 		self.log = u.get_logger('tb')
+		self.timer_wrapper = timer if timer else lambda f,*a,**k: func(*a,**k)
 
 		lines = self.timetable_lines(timetable)
 		transfers = self.precalc_transfer_set(timetable, lines)
@@ -18,7 +19,13 @@ class TBRoutingEngine:
 		self.log.debug('Resulting transfer set size: {:,}', len(transfers))
 		raise NotImplementedError
 
+	def timer(self_or_func, func=None, *args, **kws):
+		'Calculation call wrapper for timer/progress logging.'
+		if not func: return lambda s,*a,**k: s.timer_wrapper(self_or_func, s, *a, **k)
+		return self_or_func.timer_wrapper(func, *args, **kws)
+
 	def progress_iter(self, prefix, n_max, steps=30, n=0):
+		'Progress logging helper coroutine for long calculations.'
 		steps = min(n_max, steps)
 		step_n = n_max // steps
 		while True:
@@ -34,6 +41,7 @@ class TBRoutingEngine:
 				self.log.debug('[{}] Step {} / {}{}', prefix, n // step_n, steps, msg or '')
 
 
+	@timer
 	def timetable_lines(self, tt):
 		'Line (pre-)calculation from Timetable data.'
 
@@ -67,14 +75,15 @@ class TBRoutingEngine:
 		return lines
 
 
+	@timer
 	def precalc_transfer_set(self, tt, lines):
 		# Precalculation steps here are not merged and not parallelized in any way.
-		raise NotImplementedError
 		transfers = self._pre_initial_set(tt, lines)
 		transfers = self._pre_remove_u_turns(transfers)
 		transfers = self._pre_reduction(tt, transfers)
 		return transfers
 
+	@timer
 	def _pre_initial_set(self, tt, lines):
 		'Algorithm 1: Initial transfer computation.'
 		transfers = t.internal.TransferSet()
@@ -83,8 +92,8 @@ class TBRoutingEngine:
 			for i, ts_p in enumerate(trip_t):
 				if i == 0: continue # "do not add any transfers from the first stop ..."
 
-				for stop_q in tt.stops.values():
-					try: dt_fp_pq = tt.footpaths[t.stop_pair_key(ts_p.stop, stop_q)]
+				for stop_q in tt.stops:
+					try: dt_fp_pq = tt.footpaths[ts_p.stop, stop_q]
 					except KeyError: continue # p->q is impossible on foot
 					dts_q = ts_p.dts_arr + dt_fp_pq
 
@@ -94,11 +103,12 @@ class TBRoutingEngine:
 							# XXX: do mod() for dt on comparisons to wrap-around into next day
 							if dts_q <= trip_u[j].dts_dep: break
 						else: continue # all trips for L(q) have departed by dts_q
-						transfers.add(t.Transfer(trip_t, i, trip_u, j))
+						transfers.add(t.internal.Transfer(trip_t, i, trip_u, j))
 
 		self.log.debug('Initial transfer set size: {:,}', len(transfers))
 		return transfers
 
+	@timer
 	def _pre_remove_u_turns(self, transfers):
 		'Algorithm 2: Remove U-turn transfers.'
 		transfers_discard = list()
@@ -112,6 +122,7 @@ class TBRoutingEngine:
 		self.log.debug('Discarded U-turns: {:,}', len(transfers_discard))
 		return transfers
 
+	@timer
 	def _pre_reduction(self, tt, transfers, inf=float('inf')):
 		'Algorithm 3: Transfer reduction.'
 		stop_arr, stop_ch = dict(), dict()
