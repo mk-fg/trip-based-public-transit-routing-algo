@@ -20,7 +20,7 @@ class TBRoutingEngine:
 	def cached(self_or_dec, func=None, *args, **kws):
 		'''Calculation call wrapper for caching and benchmarking stuff. Can be used as a decorator.'''
 		if not func: return lambda s,*a,**k: s.cache_wrapper(self_or_dec, s, *a, **k)
-		return self.cache_wrapper(func, *args, **kws)
+		return self_or_dec.cache_wrapper(func, *args, **kws)
 
 
 	@cached
@@ -28,9 +28,9 @@ class TBRoutingEngine:
 		'''Line (pre-)calculation from Timetable data.
 
 			Lines - trips with identical stop sequences,
-				ordered from earliest-to-latest by arrival time.
+				ordered from earliest-to-latest by arrival time on ALL stops.
 			If one trip overtakes another (making
-				ordering impossible), it will be split into diff line.'''
+				such strict ordering impossible), they will be split into different lines.'''
 
 		line_trips = defaultdict(list)
 		line_stops = lambda trip: tuple(map(op.attrgetter('stop'), trip))
@@ -65,6 +65,7 @@ class TBRoutingEngine:
 
 	@cached
 	def precalc_transfer_set(self, tt, lines):
+		# Precalculation steps here are not merged and not parallelized in any way.
 		transfers = self._pre_initial_set(tt, lines)
 		transfers = self._pre_remove_u_turns(transfers)
 		transfers = self._pre_reduction(tt, transfers)
@@ -118,7 +119,7 @@ class TBRoutingEngine:
 			if dts < stop_map.get(stop_id, inf):
 				stop_map[stop_id] = dts
 				return True
-			else: return False
+			return False
 
 		for trip_t in tt.trips:
 			for i in range(len(trip_t)-1, 0, -1): # first stop is skipped here as well
@@ -144,8 +145,8 @@ class TBRoutingEngine:
 							try: dt_fp_pq = tt.footpaths[t.stop_pair_key(ts_u.stop, stop_q)]
 							except KeyError: continue
 							dts_q = ts_u.dts_arr + dt_fp_pq
-							keep = keep | set_min(stop_arr, stop_q, dts_q)
-							keep = keep | set_min(stop_ch, stop_q, dts_q)
+							keep = keep | set_min(stop_arr, stop_q.id, dts_q)
+							keep = keep | set_min(stop_ch, stop_q.id, dts_q)
 
 					if not keep: transfers_discard.append(k)
 

@@ -85,7 +85,7 @@ def main(args=None):
 
 	group = parser.add_argument_group('Caching options')
 	group.add_argument('-c', '--cache-dir', metavar='path',
-		help='Cache each step of calculation where that is supported to files in specified dir.')
+		help='Cache each step of calculation (where supported) to files in specified dir.')
 	group.add_argument('-s', '--cache-skip', metavar='pattern',
 		help='Module/function name(s) (space-separated) to'
 				' auto-invalidate any existing cached data for.'

@@ -1,7 +1,7 @@
 from collections import OrderedDict
 import re, pickle, base64, hashlib, time
 
-from . import utils as u, types as t
+from . import utils as u
 
 
 class CacheLazySkipped(object): pass
