@@ -9,11 +9,6 @@ import tb_routing as tb
 
 
 class Conf:
-
-	path_dep_tree = re.sub(r'.*/([^/]+?)(\.py)?$', r'\1.cache-dep-tree', __file__)
-
-	dt_ch = 5*60 # fixed time-delta overhead for changing trips
-
 	stop_linger_time_default = 5*60 # used if departure-time is missing
 	footpath_dt_base = 1*60 # footpath_dt = dt_base + km / speed_kmh
 	footpath_speed_kmh = 5 / 3600
@@ -89,21 +84,6 @@ def main(args=None):
 	parser.add_argument('gtfs_dir', help='Path to gtfs data directory to build graph from.')
 	parser.add_argument('-d', '--debug', action='store_true', help='Verbose operation mode.')
 
-	group = parser.add_argument_group('Caching options')
-	group.add_argument('-c', '--cache-dir', metavar='path',
-		help='Cache each step of calculation (where supported) to files in specified dir.')
-	group.add_argument('-s', '--cache-skip', metavar='pattern',
-		help='Module/function name(s) (space-separated) to'
-				' auto-invalidate any existing cached data for.'
-			' Matched against "<module-name>.<func-name>" as a simple substring.')
-	group.add_argument('-t', '--cache-dep-tree',
-		metavar='path', default=conf.path_dep_tree,
-		help='Cache dependency tree - i.e. which cached'
-				' calculation depends on which, in asciitree.LeftAligned format.'
-			' Default is to look it up in following file (if exists): %(default)s')
-	group.add_argument('-l', '--cache-lazy', action='store_true',
-		help='Skip loading cached data for dependencies of stuff that is also cached.')
-
 	opts = parser.parse_args(sys.argv[1:] if args is None else args)
 
 	global log
@@ -113,12 +93,7 @@ def main(args=None):
 		level=tb.u.logging.DEBUG if opts.debug else tb.u.logging.WARNING )
 	log = tb.u.get_logger('main')
 
-	cache = tb.cache.CalculationCache(
-		opts.cache_dir and Path(opts.cache_dir), [opts.gtfs_dir],
-		invalidate=opts.cache_skip and opts.cache_skip.split(),
-		dep_tree_file=Path(opts.cache_dep_tree), lazy=opts.cache_lazy )
-
-	timetable = cache.run(parse_gtfs_timetable, Path(opts.gtfs_dir))
-	router = tb.engine.TBRoutingEngine(conf, timetable, cache=cache)
+	timetable = parse_gtfs_timetable(Path(opts.gtfs_dir))
+	router = tb.engine.TBRoutingEngine(timetable)
 
 if __name__ == '__main__': sys.exit(main())

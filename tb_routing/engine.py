@@ -6,22 +6,17 @@ from . import utils as u, types as t
 
 class TBRoutingEngine:
 
-	def __init__(self, conf, timetable, cache=None):
+	dt_ch = 5*60 # fixed time-delta overhead for changing trips
+
+	def __init__(self, timetable):
 		'''Creates Trip-Based Routing Engine from Timetable data.'''
-		self.conf, self.log = conf, u.get_logger('tb')
-		self.cache = cache
-		self.cache_wrapper = cache.run if cache else lambda f,*a,**k: func(*a,**k)
+		self.log = u.get_logger('tb')
 
 		lines = self.timetable_lines(timetable)
 		transfers = self.precalc_transfer_set(timetable, lines)
 
 		self.log.debug('Resulting transfer set size: {:,}', len(transfers))
 		raise NotImplementedError
-
-	def cached(self_or_dec, func=None, *args, **kws):
-		'''Calculation call wrapper for caching and benchmarking stuff. Can be used as a decorator.'''
-		if not func: return lambda s,*a,**k: s.cache_wrapper(self_or_dec, s, *a, **k)
-		return self_or_dec.cache_wrapper(func, *args, **kws)
 
 	def progress_iter(self, prefix, n_max, steps=30, n=0):
 		steps = min(n_max, steps)
@@ -39,7 +34,6 @@ class TBRoutingEngine:
 				self.log.debug('[{}] Step {} / {}{}', prefix, n // step_n, steps, msg or '')
 
 
-	@cached
 	def timetable_lines(self, tt):
 		'Line (pre-)calculation from Timetable data.'
 
@@ -73,7 +67,6 @@ class TBRoutingEngine:
 		return lines
 
 
-	@cached
 	def precalc_transfer_set(self, tt, lines):
 		# Precalculation steps here are not merged and not parallelized in any way.
 		raise NotImplementedError
@@ -82,7 +75,6 @@ class TBRoutingEngine:
 		transfers = self._pre_reduction(tt, transfers)
 		return transfers
 
-	@cached
 	def _pre_initial_set(self, tt, lines):
 		'Algorithm 1: Initial transfer computation.'
 		transfers = t.internal.TransferSet()
@@ -107,7 +99,6 @@ class TBRoutingEngine:
 		self.log.debug('Initial transfer set size: {:,}', len(transfers))
 		return transfers
 
-	@cached
 	def _pre_remove_u_turns(self, transfers):
 		'Algorithm 2: Remove U-turn transfers.'
 		transfers_discard = list()
@@ -115,13 +106,12 @@ class TBRoutingEngine:
 			try: ts_t, ts_u = trip_t[i-1], trip_u[j+1]
 			except IndexError: continue
 			if ( ts_t.stop == ts_u.stop
-					and ts_t.dts_arr + self.conf.dt_ch <= ts_u.dts_dep ):
+					and ts_t.dts_arr + self.dt_ch <= ts_u.dts_dep ):
 				transfers_discard.append(k)
 		transfers.discard(transfers_discard)
 		self.log.debug('Discarded U-turns: {:,}', len(transfers_discard))
 		return transfers
 
-	@cached
 	def _pre_reduction(self, tt, transfers, inf=float('inf')):
 		'Algorithm 3: Transfer reduction.'
 		stop_arr, stop_ch = dict(), dict()
