@@ -12,7 +12,7 @@ class Conf:
 	stop_linger_time_default = 5*60 # used if departure-time is missing
 	footpath_dt_base = 1*60 # footpath_dt = dt_base + km / speed_kmh
 	footpath_speed_kmh = 5 / 3600
-	footpath_dt_max = 20*60 # all footpaths longer than that are discarded as invalid
+	footpath_dt_max = 7*60 # all footpaths longer than that are discarded as invalid
 
 conf = Conf() # XXX: placeholder
 
@@ -45,18 +45,14 @@ def parse_gtfs_timetable(gtfs_dir):
 	'Parse Timetable from GTFS data directory.'
 	types = tb.t.input
 
-	stops = types.Stops()
+	stops_dict = dict() # only subset that is part of trips will be used
 	for t in iter_gtfs_tuples(gtfs_dir, 'stops'):
-		stops.add(types.Stop(t.stop_id, t.stop_name, t.stop_lon, t.stop_lat))
+		stops_dict[t.stop_id] = types.Stop(t.stop_id, t.stop_name, t.stop_lon, t.stop_lat)
 
-	footpaths = types.Footpaths()
-	for stop_a, stop_b in it.combinations(list(stops), 2):
-		footpaths.add(stop_a, stop_b, footpath_dt(stop_a, stop_b))
-
-	trip_stops = defaultdict(list)
+	trip_stops = defaultdict(list) # only subset listed in trips.txt will be used
 	for t in iter_gtfs_tuples(gtfs_dir, 'stop_times'): trip_stops[t.trip_id].append(t)
 
-	trips = types.Trips()
+	trips, stops = types.Trips(), types.Stops()
 	for t in iter_gtfs_tuples(gtfs_dir, 'trips'):
 		trip = types.Trip()
 		for ts in sorted(trip_stops[t.trip_id], key=lambda t: int(t.stop_sequence)):
@@ -67,9 +63,14 @@ def parse_gtfs_timetable(gtfs_dir):
 					else: continue
 				else: dts_arr = trip[-1].dts_dep # "scheduled based on the nearest preceding timed stop"
 			if not dts_dep: dts_dep = dts_arr + conf.stop_linger_time_default
-			trip.append(
-				types.TripStop(stop=stops[ts.stop_id], dts_arr=dts_arr, dts_dep=dts_dep) )
+			stops.add(stops_dict[ts.stop_id])
+			trip.add(types.TripStop(
+				stop=stops[ts.stop_id], dts_arr=dts_arr, dts_dep=dts_dep ))
 		if trip: trips.add(trip)
+
+	footpaths = types.Footpaths()
+	for stop_a, stop_b in it.combinations(list(stops), 2):
+		footpaths.add(stop_a, stop_b, footpath_dt(stop_a, stop_b))
 
 	log.debug(
 		'Parsed timetable: stops={} footpaths={} trips={} trip_stops={}',

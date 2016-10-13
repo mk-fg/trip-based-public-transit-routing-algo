@@ -37,20 +37,29 @@ class Lines:
 
 
 @u.attr_struct(slots=True)
-class Transfer: keys = 'trip_from stopidx_from trip_to stopidx_to'
+class Transfer:
+	keys = 'trip_from stopidx_from trip_to stopidx_to'
+	def __iter__(self): return iter(u.attr.astuple(self, recurse=False))
 
 class TransferSet:
 
 	def __init__(self): self.set_idx = dict()
 
+	def _trip_stop_key(self, trip, stopidx):
+		return trip.id, trip[stopidx].stop.id
+
 	def add(self, transfer):
-		k = transfer.trip_from[transfer.stopidx_from].id
+		k = self._trip_stop_key(transfer.trip_from, transfer.stopidx_from)
 		self.set_idx.setdefault(k, dict())[len(self.set_idx[k])] = transfer
 
 	def discard(self, keys):
 		for k1, k2 in keys:
 			del self.set_idx[k1][k2]
 			if not self.set_idx[k1]: del self.set_idx[k1]
+
+	def from_trip_stop(self, trip, stopidx):
+		k1 = self._trip_stop_key(trip, stopidx)
+		for k2, transfer in self.set_idx[k1].items(): yield (k1, k2), transfer
 
 	def __len__(self): return sum(map(len, self.set_idx.values()))
 	def __iter__(self):

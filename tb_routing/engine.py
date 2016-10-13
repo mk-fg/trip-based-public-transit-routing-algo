@@ -17,6 +17,7 @@ class TBRoutingEngine:
 		transfers = self.precalc_transfer_set(timetable, lines)
 
 		self.log.debug('Resulting transfer set size: {:,}', len(transfers))
+		u.pickle_dump([timetable, lines, transfers])
 		raise NotImplementedError
 
 	def timer(self_or_func, func=None, *args, **kws):
@@ -24,17 +25,18 @@ class TBRoutingEngine:
 		if not func: return lambda s,*a,**k: s.timer_wrapper(self_or_func, s, *a, **k)
 		return self_or_func.timer_wrapper(func, *args, **kws)
 
+	@u.coroutine
 	def progress_iter(self, prefix, n_max, steps=30, n=0):
 		'Progress logging helper coroutine for long calculations.'
 		steps = min(n_max, steps)
 		step_n = n_max // steps
 		while True:
 			dn_msg = yield
-			if isinstance(n_msg, tuple): dn, msg = dn_msg
-			elif isinstance(n_msg, int): dn, msg = dn_msg, None
+			if isinstance(dn_msg, tuple): dn, msg = dn_msg
+			elif isinstance(dn_msg, int): dn, msg = dn_msg, None
 			else: dn, msg = 1, dn_msg
 			n += dn
-			if n % step_n:
+			if n == dn or n % step_n == 0:
 				if msg:
 					if not isinstance(msg, str): msg = msg[0].format(*msg[1:])
 					msg = ': {}'.format(msg)
@@ -112,7 +114,7 @@ class TBRoutingEngine:
 	def _pre_remove_u_turns(self, transfers):
 		'Algorithm 2: Remove U-turn transfers.'
 		transfers_discard = list()
-		for k, transfer in transfers:
+		for k, (trip_t, i, trip_u, j) in transfers:
 			try: ts_t, ts_u = trip_t[i-1], trip_u[j+1]
 			except IndexError: continue
 			if ( ts_t.stop == ts_u.stop
@@ -142,31 +144,31 @@ class TBRoutingEngine:
 				ts_p, transfers_discard = trip_t[i], list()
 				set_min(stop_arr, ts_p.stop.id, ts_p.dts_arr)
 
-				for stop_q in tt.stops.values():
-					try: dt_fp_pq = tt.footpaths[t.stop_pair_key(ts_p.stop, stop_q)]
+				for stop_q in tt.stops:
+					try: dt_fp_pq = tt.footpaths[ts_p.stop, stop_q]
 					except KeyError: continue
 					dts_q = ts_p.dts_arr + dt_fp_pq
 
 					set_min(stop_arr, stop_q.id, dts_q)
 					set_min(stop_ch, stop_q.id, dts_q)
 
-				for k, (trip_t, i, trip_u, j) in transfers.items():
+				for transfer_id, (_, _, trip_u, j) in transfers.from_trip_stop(trip_t, i):
 					keep = False
 
 					for k in range(j+1, len(trip_u)):
 						ts_u = trip_u[k]
 						keep = keep | set_min(stop_arr, ts_u.stop.id, ts_u.dts_arr)
 
-						for stop_q in tt.stops.values():
-							try: dt_fp_pq = tt.footpaths[t.stop_pair_key(ts_u.stop, stop_q)]
+						for stop_q in tt.stops:
+							try: dt_fp_pq = tt.footpaths[ts_u.stop, stop_q]
 							except KeyError: continue
 							dts_q = ts_u.dts_arr + dt_fp_pq
 							keep = keep | set_min(stop_arr, stop_q.id, dts_q)
 							keep = keep | set_min(stop_ch, stop_q.id, dts_q)
 
-					if not keep: transfers_discard.append(k)
+					if not keep: transfers_discard.append(transfer_id)
 
-				for k in transfers_discard: del transfers[k]
+				transfers.discard(transfers_discard)
 				discarded_n += len(transfers_discard)
 
 		self.log.debug('Discarded no-improvement transfers: {:,}', len(transfers_discard))

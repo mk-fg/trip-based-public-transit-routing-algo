@@ -34,3 +34,27 @@ def attr_struct(cls=None, **kws):
 def attr_init(factory=None, **attr_kws):
 	factory = attr.Factory(factory) if factory else attr.NOTHING
 	return attr.ib(default=factory, **attr_kws)
+
+
+def coroutine(func):
+	@ft.wraps(func)
+	def cr_wrapper(*args, **kws):
+		cr = func(*args, **kws)
+		next(cr)
+		return cr
+	return cr_wrapper
+
+
+pickle_log = get_logger('pickle')
+
+def pickle_dump(state, name='state.pickle'):
+	import pickle
+	with open(name, 'wb') as dst:
+		pickle_log.debug('Pickling data (type: {}) to: {}', state.__class__.__name__, name)
+		pickle.dump(state, dst)
+
+def pickle_load(name='state.pickle'):
+	import pickle
+	with open(name, 'rb') as src:
+		pickle_log.debug('Unpickling data from: {}', name)
+		return pickle.load(src)
