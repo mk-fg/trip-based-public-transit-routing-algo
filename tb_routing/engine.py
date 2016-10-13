@@ -121,9 +121,9 @@ class TBRoutingEngine:
 				return True
 			return False
 
-		for trip_t in tt.trips:
-			for i in range(len(trip_t)-1, 0, -1): # first stop is skipped here as well
-				ts_p = trip_t[i]
+		for trip in tt.trips:
+			for i in range(len(trip)-1, 0, -1): # first stop is skipped here as well
+				ts_p = trip[i]
 				set_min(stop_arr, ts_p.stop.id, ts_p.dts_arr)
 
 				for stop_q in tt.stops.values():
