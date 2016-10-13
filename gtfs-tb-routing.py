@@ -3,7 +3,7 @@
 import itertools as it, operator as op, functools as ft
 from collections import namedtuple, defaultdict
 from pathlib import Path
-import os, sys, re, csv, math, bisect
+import os, sys, re, csv, math
 
 import tb_routing as tb
 
@@ -48,20 +48,22 @@ def footpath_dt(stop_a, stop_b, math=math):
 
 def parse_gtfs_timetable(gtfs_dir):
 	'Parse Timetable from GTFS data directory.'
-	stops = dict(
-		(t.stop_id, tb.t.Stop(t.stop_id, t.stop_name, t.stop_lon, t.stop_lat))
-		for t in iter_gtfs_tuples(gtfs_dir, 'stops') )
+	types = tb.t.input
 
-	footpaths = sorted(
-		(footpath_dt(a, b), tb.t.stop_pair_key(a, b))
-		for a, b in it.combinations(list(stops.values()), 2) )
-	n = bisect.bisect_left(footpaths, (conf.footpath_dt_max, ''))
-	footpaths = dict((k,v) for v,k in footpaths[:n])
+	stops = types.Stops()
+	for t in iter_gtfs_tuples(gtfs_dir, 'stops'):
+		stops.add(types.Stop(t.stop_id, t.stop_name, t.stop_lon, t.stop_lat))
 
-	trips, trip_stops = list(), defaultdict(list)
+	footpaths = types.Footpaths()
+	for stop_a, stop_b in it.combinations(list(stops), 2):
+		footpaths.add(stop_a, stop_b, footpath_dt(stop_a, stop_b))
+
+	trip_stops = defaultdict(list)
 	for t in iter_gtfs_tuples(gtfs_dir, 'stop_times'): trip_stops[t.trip_id].append(t)
+
+	trips = types.Trips()
 	for t in iter_gtfs_tuples(gtfs_dir, 'trips'):
-		trip = list()
+		trip = types.Trip()
 		for ts in sorted(trip_stops[t.trip_id], key=lambda t: int(t.stop_sequence)):
 			dts_arr, dts_dep = map(parse_gtfs_dts, [ts.arrival_time, ts.departure_time])
 			if not dts_arr:
@@ -70,10 +72,14 @@ def parse_gtfs_timetable(gtfs_dir):
 					else: continue
 				else: dts_arr = trip[-1].dts_dep # "scheduled based on the nearest preceding timed stop"
 			if not dts_dep: dts_dep = dts_arr + conf.stop_linger_time_default
-			trip.append(tb.t.TripStop(stops[ts.stop_id], dts_arr, dts_dep))
-		if trip: trips.append(trip)
+			trip.append(
+				types.TripStop(stop=stops[ts.stop_id], dts_arr=dts_arr, dts_dep=dts_dep) )
+		if trip: trips.add(trip)
 
-	return tb.t.Timetable(stops, footpaths, trips)
+	log.debug(
+		'Parsed timetable: stops={} footpaths={} trips={} trip_stops={}',
+		len(stops), len(footpaths), len(trips), len(trip_stops) )
+	return types.Timetable(stops, footpaths, trips)
 
 
 def main(args=None):
