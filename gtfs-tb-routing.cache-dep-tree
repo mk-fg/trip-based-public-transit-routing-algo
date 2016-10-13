@@ -1,6 +1,8 @@
-# Cache dependencies (substring patterns) for the gtfs_tb_routing.py script.
+# Cache dependencies (substring patterns) for the gtfs-tb-routing.py script.
 # If any leaf calculations are performed (not cached),
 #  all higher-level stuff is automatically invalidated.
+# With --cache-lazy option, cached data is not even loaded for
+#  dependencies, if dependent stuff will be loaded from cache anyway (won't need it).
 # Format is asciitree.LeftAligned.
 
 precalc_transfer_set
