@@ -102,6 +102,8 @@ def main(args=None):
 
 	global log
 	tb.u.logging.basicConfig(
+		format='%(asctime)s :: %(name)s %(levelname)s :: %(message)s',
+		datefmt='%Y-%m-%d %H:%M:%S',
 		level=tb.u.logging.DEBUG if opts.debug else tb.u.logging.WARNING )
 	log = tb.u.get_logger('main')
 
