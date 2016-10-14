@@ -13,12 +13,18 @@ class TBRoutingEngine:
 		self.log = u.get_logger('tb')
 		self.timer_wrapper = timer_func if timer_func else lambda f,*a,**k: func(*a,**k)
 
-		lines = self.timetable_lines(timetable)
-		transfers = self.precalc_transfer_set(timetable, lines)
-
-		self.log.debug('Resulting transfer set size: {:,}', len(transfers))
-		u.pickle_dump([timetable, lines, transfers])
-		raise NotImplementedError
+		pickle_cache = None
+		if u.use_pickle_cache:
+			pickle_cache = u.pickle_load()
+		if pickle_cache:
+			timetable, lines, transfers = pickle_cache
+		else:
+			lines = self.timetable_lines(timetable)
+			transfers = self.precalc_transfer_set(timetable, lines)
+		if u.use_pickle_cache and not pickle_cache:
+			u.pickle_dump([timetable, lines, transfers])
+		self.log.debug('Precalculated transfer set size: {:,}', len(transfers))
+		self.transfers = transfers
 
 	def timer(self_or_func, func=None, *args, **kws):
 		'Calculation call wrapper for timer/progress logging.'

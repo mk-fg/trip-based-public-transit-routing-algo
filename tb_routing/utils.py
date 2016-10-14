@@ -1,5 +1,5 @@
 import itertools as it, operator as op, functools as ft
-import logging
+import os, sys, logging
 
 import attr
 
@@ -47,16 +47,20 @@ def coroutine(func):
 inf = float('inf')
 
 
+use_pickle_cache = os.environ.get('TB_PICKLE')
 pickle_log = get_logger('pickle')
 
-def pickle_dump(state, name='state.pickle'):
+def pickle_dump(state, name=use_pickle_cache or 'state.pickle'):
 	import pickle
 	with open(name, 'wb') as dst:
 		pickle_log.debug('Pickling data (type: {}) to: {}', state.__class__.__name__, name)
 		pickle.dump(state, dst)
 
-def pickle_load(name='state.pickle'):
+def pickle_load(name=use_pickle_cache or 'state.pickle', fail=Fals):
 	import pickle
-	with open(name, 'rb') as src:
-		pickle_log.debug('Unpickling data from: {}', name)
-		return pickle.load(src)
+	try:
+		with open(name, 'rb') as src:
+			pickle_log.debug('Unpickling data from: {}', name)
+			return pickle.load(src)
+	except OSError as err:
+		if fail: raise
