@@ -55,8 +55,13 @@ class Footpaths:
 	def __iter__(self): return iter(self.set_idx.items())
 
 
+trip_stop_daytime = lambda dts: dts % (24 * 3600)
+
 @u.attr_struct(slots=True)
-class TripStop: keys = 'stop dts_arr dts_dep'
+class TripStop:
+	stop = u.attr_init()
+	dts_arr = u.attr_init(convert=trip_stop_daytime)
+	dts_dep = u.attr_init(convert=trip_stop_daytime)
 
 @u.attr_struct(slots=True)
 class Trip:

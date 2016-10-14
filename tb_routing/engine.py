@@ -106,7 +106,6 @@ class TBRoutingEngine:
 					for j, line in lines[stop_q.id]:
 						if j == len(line[0]) - 1: continue # "do not add any transfers ... to the last stop"
 						for trip_u in line:
-							# XXX: do mod() for dt on comparisons to wrap-around into next day
 							if dts_q <= trip_u[j].dts_dep: break
 						else: continue # all trips for L(q) have departed by dts_q
 						transfers.add(t.internal.Transfer(trip_t, i, trip_u, j))
