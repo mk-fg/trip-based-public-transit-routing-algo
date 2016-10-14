@@ -1,14 +1,21 @@
-import itertools as it, operator as op, functools as ft
-from collections import UserList
-import bisect
-
-from .. import utils as u
-
-
 ### TBRoutingEngine input data
 
 # "We consider public transit networks defined by an aperiodic
 #  timetable, consisting of a set of stops, a set of footpaths and a set of trips."
+
+import itertools as it, operator as op, functools as ft
+from collections import UserList
+import bisect, enum
+
+from .. import utils as u
+
+
+class SolutionStatus(enum.Enum):
+	'Used as a result for solution (e.g. Trip) comparisons.'
+	dominated = False
+	non_dominated = True
+	equal = None
+	undecidable = ...
 
 
 @u.attr_struct(slots=True)
@@ -57,6 +64,16 @@ class Trip:
 	id = u.attr_init(lambda seq=iter(range(2**40)): next(seq))
 
 	def add(self, stop): self.stops.append(stop)
+
+	def compare(self, trip):
+		'Return SolutionStatus for this trip as compared to other trip.'
+		check = set( # True: a ≺ b, False: b ≺ a, None: a == b
+			(None if sa.dts_arr == sb.dts_arr else sa.dts_arr <= sb.dts_arr)
+			for sa, sb in zip(self, trip) ).difference([None])
+		if len(check) == 1: return SolutionStatus(check.pop())
+		if not check: return SolutionStatus.equal
+		return SolutionStatus.undecidable
+
 	def __getitem__(self, n): return self.stops[n]
 	def __len__(self): return len(self.stops)
 	def __iter__(self): return iter(self.stops)

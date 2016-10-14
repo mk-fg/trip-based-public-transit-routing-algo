@@ -43,7 +43,7 @@ def footpath_dt(stop_a, stop_b, math=math):
 
 def parse_gtfs_timetable(gtfs_dir):
 	'Parse Timetable from GTFS data directory.'
-	types = tb.t.input
+	types = tb.t.public
 
 	stops_dict = dict() # only subset that is part of trips will be used
 	for t in iter_gtfs_tuples(gtfs_dir, 'stops'):

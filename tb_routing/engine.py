@@ -63,21 +63,18 @@ class TBRoutingEngine:
 			lines_for_stopseq = list()
 
 			# Split same-stops trips into non-overtaking groups
-			for a in trips:
+			for trip_a in trips:
 				for line in lines_for_stopseq:
-					for b in line:
-						# XXX: move into t.Line
-						overtake_check = set( # True: a ≺ b, False: b ≺ a, None: a == b
-							(None if sa.dts_arr == sb.dts_arr else sa.dts_arr <= sb.dts_arr)
-							for sa, sb in zip(a, b) ).difference([None])
-						if len(overtake_check) == 1: continue # can be ordered
-						if not overtake_check: a = None # discard exact duplicates
-						break # can't be ordered - split into diff line
+					for trip_b in line:
+						ordering = trip_a.compare(trip_b)
+						if ordering is ordering.undecidable: break
+						elif ordering is ordering.equal: trip_a = None # discard exact duplicates
 					else:
-						line.add(a)
+						line.add(trip_a)
 						break
-					if not a: break
-				else: lines_for_stopseq.append(t.internal.Line(a)) # failed to find line to group trip into
+					if not trip_a: break
+				else: # failed to find line to group trip into
+					lines_for_stopseq.append(t.internal.Line(trip_a))
 
 			lines.add(*lines_for_stopseq)
 

@@ -1,10 +1,10 @@
+### TBRoutingEngine internal types
+
 import itertools as it, operator as op, functools as ft
 import bisect
 
 from .. import utils as u
 
-
-### TBRoutingEngine internal types
 
 class Line:
 	'''Line - group of trips with identical stop sequences,
@@ -16,7 +16,7 @@ class Line:
 
 	def add(self, *trips):
 		self.set_idx.extend(trips)
-		self.set_idx.sort(key=lambda t: sum(map(op.attrgetter('dts_arr'), t)))
+		self.set_idx.sort(key=lambda trip: sum(map(op.attrgetter('dts_arr'), trip)))
 
 	def __getitem__(self, k): return self.set_idx[k]
 	def __iter__(self): return iter(self.set_idx)

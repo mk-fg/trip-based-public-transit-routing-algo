@@ -56,7 +56,7 @@ def pickle_dump(state, name=use_pickle_cache or 'state.pickle'):
 		pickle_log.debug('Pickling data (type: {}) to: {}', state.__class__.__name__, name)
 		pickle.dump(state, dst)
 
-def pickle_load(name=use_pickle_cache or 'state.pickle', fail=Fals):
+def pickle_load(name=use_pickle_cache or 'state.pickle', fail=False):
 	import pickle
 	try:
 		with open(name, 'rb') as src:
