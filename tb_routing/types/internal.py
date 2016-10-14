@@ -19,9 +19,9 @@ class Line:
 		self.set_idx.extend(trips)
 		self.set_idx.sort(key=lambda trip: sum(map(op.attrgetter('dts_arr'), trip)))
 
-	def earliest_trip(self, dts=0):
+	def earliest_trip(self, stopidx, dts=0):
 		for trip in self:
-			if trip.dts_dep >= dts: return trip
+			if trip[stopidx].dts_dep >= dts: return trip
 
 	def trips_by_relation(self, trip, *rel_set):
 		'''Return trips from line with specified SolutionStatus relation(s) *from* trip.
@@ -50,7 +50,7 @@ class Lines:
 		'All lines going through stop as (stopidx, line) tuples.'
 		return self.idx_stop[stop]
 
-	def line_for_trip(self, trip): return self.idx_trip[k]
+	def line_for_trip(self, trip): return self.idx_trip[trip]
 
 	def __iter__(self): return iter(self.idx_trip.values())
 

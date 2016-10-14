@@ -189,14 +189,16 @@ class TBRoutingEngine:
 					.trips_by_relation(trip, ss.non_dominated, ss.equal):
 				R[trip_u] = min(R[trip_u], i)
 
-		lines_to_dst = list()
+		lines_to_dst = dict() # (i, line, dt) indexed by trip
 		for stop_q in timetable.stops:
 			if stop_q is stop_dst: dt_fp = 0
 			else:
 				try: dt_fp = timetable.footpaths[stop_q, stop_dst]
 				except KeyError: continue
-			lines_to_dst.extend((i, line, dts_q) for i, line in lines[stop_q])
-		lines_to_dst.sort(reverse=True, key=op.itemgetter(0))
+			for i, line in lines.lines_with_stop(stop_q):
+				for trip in line: lines_to_dst.setdefault(trip, list()).append((i, line, dt_fp))
+		for line_infos in lines_to_dst.values():
+			line_infos.sort(reverse=True, key=op.itemgetter(0))
 
 		for stop_q in timetable.stops:
 			if stop_q is stop_src: dt_fp = 0
@@ -204,20 +206,20 @@ class TBRoutingEngine:
 				try: dt_fp = timetable.footpaths[stop_src, stop_q]
 				except KeyError: continue
 				dts_q = dts_src + dt_fp
-				for i, line in lines[stop_q]:
-					trip = line.earliest_trip(dts_q)
+				for i, line in lines.lines_with_stop(stop_q):
+					trip = line.earliest_trip(i, dts_q)
 					if trip: enqueue(trip, i, 0)
 
 		t_min, n, results = u.inf, 0, list()
 		while Q:
-			for trip, b, e in Q[n]:
-				for i, line, dts_hop in lines_to_dst:
+			for trip, b, e in Q.pop(n):
+				for i, line, dts_hop in lines_to_dst.get(trip, list()):
 					if i <= b: break
 					line_dts = trip[i].dts_arr + dts_hop
 					if line_dts < t_min:
 						t_min = line_dts
 						results.append((t_min, n))
-					if trip[b+1] < t_min:
+					if trip[b+1].dts_arr < t_min:
 						for i in range(b+1, e+1):
 							for k, (_, _, trip_u, j) in transfers.from_trip_stop(trip, i):
 								enqueue(trip_u, j, n+1)
