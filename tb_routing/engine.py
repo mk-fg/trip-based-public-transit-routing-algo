@@ -179,15 +179,16 @@ class TBRoutingEngine:
 	@timer
 	def query_earliest_arrival(self, stop_src, stop_dst, dts_src):
 		timetable, lines, transfers = self.graph
-		R, Q = defaultdict(lambda: u.inf), dict()
-		trip_segment = namedtuple('TripSeg', 'trip stopidx_a stopidx_b')
 
+		R, Q = dict(), dict()
+		trip_segment = namedtuple('TripSeg', 'trip stopidx_a stopidx_b')
 		def enqueue(trip, i, n, ss=t.public.SolutionStatus):
-			if i >= R[trip]: return
-			Q.setdefault(n, deque()).append(trip_segment(trip, i, R[trip]))
+			if i >= R.get(trip, u.inf): return
+			Q.setdefault(n, deque()).append(
+				trip_segment(trip, i, R.get(trip, len(trip)-1)) )
 			for trip_u in lines.line_for_trip(trip)\
 					.trips_by_relation(trip, ss.non_dominated, ss.equal):
-				R[trip_u] = min(R[trip_u], i)
+				R[trip_u] = min(i, R.get(trip_u, u.inf))
 
 		lines_to_dst = dict() # (i, line, dt) indexed by trip
 		for stop_q in timetable.stops:
