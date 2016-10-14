@@ -18,7 +18,7 @@ class SolutionStatus(enum.Enum):
 	undecidable = ...
 
 
-@u.attr_struct(slots=True)
+@u.attr_struct
 class Stop: keys = 'id name lon lat'
 
 class Stops:
@@ -57,13 +57,13 @@ class Footpaths:
 
 trip_stop_daytime = lambda dts: dts % (24 * 3600)
 
-@u.attr_struct(slots=True)
+@u.attr_struct
 class TripStop:
 	stop = u.attr_init()
 	dts_arr = u.attr_init(convert=trip_stop_daytime)
 	dts_dep = u.attr_init(convert=trip_stop_daytime)
 
-@u.attr_struct(slots=True)
+@u.attr_struct
 class Trip:
 	stops = u.attr_init(list)
 	id = u.attr_init(lambda seq=iter(range(2**40)): next(seq))

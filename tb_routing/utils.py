@@ -29,7 +29,8 @@ def attr_struct(cls=None, **kws):
 	else:
 		if isinstance(keys, str): keys = keys.split()
 		for k in keys: setattr(cls, k, attr.ib())
-	return attr.s(cls, slots=True)
+	kws.setdefault('slots', True)
+	return attr.s(cls, **kws)
 
 def attr_init(factory=None, **attr_kws):
 	factory = attr.Factory(factory) if factory else attr.NOTHING

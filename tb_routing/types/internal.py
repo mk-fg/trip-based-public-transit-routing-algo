@@ -31,12 +31,15 @@ class Lines:
 			for n, ts in enumerate(line[0]):
 				self.set_idx.setdefault(ts.stop.id, list()).append((n, line))
 
-	def __getitem__(self, k): return self.set_idx[k]
+	def __getitem__(self, k):
+		if isinstance(k, tp.Stop): k = k.id
+		return self.set_idx[k]
+
 	def __iter__(self):
 		for n, line in self.set_idx.values(): yield line
 
 
-@u.attr_struct(slots=True)
+@u.attr_struct
 class Transfer:
 	keys = 'trip_from stopidx_from trip_to stopidx_to'
 	def __iter__(self): return iter(u.attr.astuple(self, recurse=False))
