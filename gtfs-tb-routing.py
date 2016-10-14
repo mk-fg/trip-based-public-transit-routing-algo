@@ -105,6 +105,6 @@ def main(args=None):
 	log = tb.u.get_logger('main')
 
 	timetable = calc_timer(parse_gtfs_timetable, Path(opts.gtfs_dir))
-	router = tb.engine.TBRoutingEngine(timetable, timer=calc_timer)
+	router = tb.engine.TBRoutingEngine(timetable, timer_func=calc_timer)
 
 if __name__ == '__main__': sys.exit(main())

@@ -44,6 +44,8 @@ def coroutine(func):
 		return cr
 	return cr_wrapper
 
+inf = float('inf')
+
 
 pickle_log = get_logger('pickle')
 
