@@ -45,7 +45,8 @@ def parse_gtfs_timetable(gtfs_dir, conf):
 
 	stops_dict = dict() # only subset that is part of trips will be used
 	for t in iter_gtfs_tuples(gtfs_dir, 'stops'):
-		stops_dict[t.stop_id] = types.Stop(t.stop_id, t.stop_name, t.stop_lon, t.stop_lat)
+		stops_dict[t.stop_id] = types.Stop(
+			t.stop_id, t.stop_name, float(t.stop_lon), float(t.stop_lat) )
 
 	trip_stops = defaultdict(list) # only subset listed in trips.txt will be used
 	for t in iter_gtfs_tuples(gtfs_dir, 'stop_times'): trip_stops[t.trip_id].append(t)
@@ -106,5 +107,14 @@ def main(args=None):
 	conf = Conf()
 	timetable = calc_timer(parse_gtfs_timetable, Path(opts.gtfs_dir), conf)
 	router = tb.engine.TBRoutingEngine(timetable, timer_func=calc_timer)
+
+	### Run query between two random stops
+	import random
+	stops = list(timetable.stops)
+	a = random.choice(stops)
+	while True:
+		b = random.choice(stops)
+		if b is not a: break
+	print(router.query_earliest_arrival(a, b, 0))
 
 if __name__ == '__main__': sys.exit(main())

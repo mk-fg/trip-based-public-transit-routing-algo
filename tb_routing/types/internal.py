@@ -3,6 +3,7 @@
 import itertools as it, operator as op, functools as ft
 import bisect
 
+from . import public as tp
 from .. import utils as u
 
 
@@ -18,25 +19,40 @@ class Line:
 		self.set_idx.extend(trips)
 		self.set_idx.sort(key=lambda trip: sum(map(op.attrgetter('dts_arr'), trip)))
 
+	def earliest_trip(self, dts=0):
+		for trip in self:
+			if trip.dts_dep >= dts: return trip
+
+	def trips_by_relation(self, trip, *rel_set):
+		'''Return trips from line with specified SolutionStatus relation(s) *from* trip.
+			E.g. func(t, non_dominated) will return u where t ≺ u.'''
+		for line_trip in self:
+			rel = trip.compare(line_trip)
+			if rel in rel_set: yield line_trip
+
 	def __getitem__(self, k): return self.set_idx[k]
+	def __len__(self): return len(self.set_idx)
 	def __iter__(self): return iter(self.set_idx)
 
 
 class Lines:
 
-	def __init__(self): self.set_idx = dict()
+	def __init__(self):
+		self.idx_stop, self.idx_trip = dict(), dict()
 
 	def add(self, *lines):
 		for line in lines:
-			for n, ts in enumerate(line[0]):
-				self.set_idx.setdefault(ts.stop.id, list()).append((n, line))
+			for stopidx, ts in enumerate(line[0]):
+				self.idx_stop.setdefault(ts.stop, list()).append((stopidx, line))
+			for trip in line: self.idx_trip[trip] = line
 
-	def __getitem__(self, k):
-		if isinstance(k, tp.Stop): k = k.id
-		return self.set_idx[k]
+	def lines_with_stop(self, stop):
+		'All lines going through stop as (stopidx, line) tuples.'
+		return self.idx_stop[stop]
 
-	def __iter__(self):
-		for n, line in self.set_idx.values(): yield line
+	def line_for_trip(self, trip): return self.idx_trip[k]
+
+	def __iter__(self): return iter(self.idx_trip.values())
 
 
 @u.attr_struct
@@ -68,3 +84,9 @@ class TransferSet:
 	def __iter__(self):
 		for k1, sub_idx in self.set_idx.items():
 			for k2, transfer in sub_idx.items(): yield (k1, k2), transfer
+
+
+@u.attr_struct
+class Graph:
+	keys = 'timetable lines transfers'
+	def __iter__(self): return iter(u.attr.astuple(self, recurse=False))

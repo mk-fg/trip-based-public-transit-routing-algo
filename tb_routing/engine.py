@@ -1,5 +1,5 @@
 import itertools as it, operator as op, functools as ft
-from collections import defaultdict
+from collections import defaultdict, namedtuple, deque
 
 from . import utils as u, types as t
 
@@ -14,17 +14,15 @@ class TBRoutingEngine:
 		self.timer_wrapper = timer_func if timer_func else lambda f,*a,**k: func(*a,**k)
 
 		pickle_cache = None
-		if u.use_pickle_cache:
-			pickle_cache = u.pickle_load()
-		if pickle_cache:
-			timetable, lines, transfers = pickle_cache
+		if u.use_pickle_cache: pickle_cache = u.pickle_load()
+		if pickle_cache: graph = pickle_cache
 		else:
 			lines = self.timetable_lines(timetable)
 			transfers = self.precalc_transfer_set(timetable, lines)
-		if u.use_pickle_cache and not pickle_cache:
-			u.pickle_dump([timetable, lines, transfers])
-		self.log.debug('Precalculated transfer set size: {:,}', len(transfers))
-		self.transfers = transfers
+			graph = t.internal.Graph(timetable, lines, transfers)
+		if u.use_pickle_cache and not pickle_cache: u.pickle_dump(graph)
+		self.graph = graph
+
 
 	def timer(self_or_func, func=None, *args, **kws):
 		'Calculation call wrapper for timer/progress logging.'
@@ -68,7 +66,6 @@ class TBRoutingEngine:
 					for trip_b in line:
 						ordering = trip_a.compare(trip_b)
 						if ordering is ordering.undecidable: break
-						elif ordering is ordering.equal: trip_a = None # discard exact duplicates
 					else:
 						line.add(trip_a)
 						break
@@ -87,6 +84,7 @@ class TBRoutingEngine:
 		transfers = self._pre_initial_set(timetable, lines)
 		transfers = self._pre_remove_u_turns(transfers)
 		transfers = self._pre_reduction(timetable, transfers)
+		self.log.debug('Precalculated transfer set size: {:,}', len(transfers))
 		return transfers
 
 	@timer
@@ -103,7 +101,7 @@ class TBRoutingEngine:
 					except KeyError: continue # p->q is impossible on foot
 					dts_q = ts_p.dts_arr + dt_fp_pq
 
-					for j, line in lines[stop_q.id]:
+					for j, line in lines.lines_with_stop(stop_q):
 						if j == len(line[0]) - 1: continue # "do not add any transfers ... to the last stop"
 						for trip_u in line:
 							if dts_q <= trip_u[j].dts_dep: break
@@ -132,9 +130,9 @@ class TBRoutingEngine:
 		'Algorithm 3: Transfer reduction.'
 		stop_arr, stop_ch = dict(), dict()
 
-		def set_min(stop_map, stop_id, dts):
-			if dts < stop_map.get(stop_id, u.inf):
-				stop_map[stop_id] = dts
+		def update_min_value(stop_map, stop, dts):
+			if dts < stop_map.get(stop, u.inf):
+				stop_map[stop] = dts
 				return True
 			return False
 
@@ -145,29 +143,29 @@ class TBRoutingEngine:
 
 			for i in range(len(trip_t)-1, 0, -1): # first stop is skipped here as well
 				ts_p, transfers_discard = trip_t[i], list()
-				set_min(stop_arr, ts_p.stop.id, ts_p.dts_arr)
+				update_min_value(stop_arr, ts_p.stop, ts_p.dts_arr)
 
 				for stop_q in timetable.stops:
 					try: dt_fp_pq = timetable.footpaths[ts_p.stop, stop_q]
 					except KeyError: continue
 					dts_q = ts_p.dts_arr + dt_fp_pq
 
-					set_min(stop_arr, stop_q.id, dts_q)
-					set_min(stop_ch, stop_q.id, dts_q)
+					update_min_value(stop_arr, stop_q, dts_q)
+					update_min_value(stop_ch, stop_q, dts_q)
 
 				for transfer_id, (_, _, trip_u, j) in transfers.from_trip_stop(trip_t, i):
 					keep = False
 
 					for k in range(j+1, len(trip_u)):
 						ts_u = trip_u[k]
-						keep = keep | set_min(stop_arr, ts_u.stop.id, ts_u.dts_arr)
+						keep = keep | update_min_value(stop_arr, ts_u.stop, ts_u.dts_arr)
 
 						for stop_q in timetable.stops:
 							try: dt_fp_pq = timetable.footpaths[ts_u.stop, stop_q]
 							except KeyError: continue
 							dts_q = ts_u.dts_arr + dt_fp_pq
-							keep = keep | set_min(stop_arr, stop_q.id, dts_q)
-							keep = keep | set_min(stop_ch, stop_q.id, dts_q)
+							keep = keep | update_min_value(stop_arr, stop_q, dts_q)
+							keep = keep | update_min_value(stop_ch, stop_q, dts_q)
 
 					if not keep: transfers_discard.append(transfer_id)
 
@@ -176,3 +174,53 @@ class TBRoutingEngine:
 
 		self.log.debug('Discarded no-improvement transfers: {:,}', discarded_n)
 		return transfers
+
+
+	@timer
+	def query_earliest_arrival(self, stop_src, stop_dst, dts_src):
+		timetable, lines, transfers = self.graph
+		R, Q = defaultdict(lambda: u.inf), dict()
+		trip_segment = namedtuple('TripSeg', 'trip stopidx_a stopidx_b')
+
+		def enqueue(trip, i, n, ss=t.public.SolutionStatus):
+			if i >= R[trip]: return
+			Q.setdefault(n, deque()).append(trip_segment(trip, i, R[trip]))
+			for trip_u in lines.line_for_trip(trip)\
+					.trips_by_relation(trip, ss.non_dominated, ss.equal):
+				R[trip_u] = min(R[trip_u], i)
+
+		lines_to_dst = list()
+		for stop_q in timetable.stops:
+			if stop_q is stop_dst: dt_fp = 0
+			else:
+				try: dt_fp = timetable.footpaths[stop_q, stop_dst]
+				except KeyError: continue
+			lines_to_dst.extend((i, line, dts_q) for i, line in lines[stop_q])
+		lines_to_dst.sort(reverse=True, key=op.itemgetter(0))
+
+		for stop_q in timetable.stops:
+			if stop_q is stop_src: dt_fp = 0
+			else:
+				try: dt_fp = timetable.footpaths[stop_src, stop_q]
+				except KeyError: continue
+				dts_q = dts_src + dt_fp
+				for i, line in lines[stop_q]:
+					trip = line.earliest_trip(dts_q)
+					if trip: enqueue(trip, i, 0)
+
+		t_min, n, results = u.inf, 0, list()
+		while Q:
+			for trip, b, e in Q[n]:
+				for i, line, dts_hop in lines_to_dst:
+					if i <= b: break
+					line_dts = trip[i].dts_arr + dts_hop
+					if line_dts < t_min:
+						t_min = line_dts
+						results.append((t_min, n))
+					if trip[b+1] < t_min:
+						for i in range(b+1, e+1):
+							for k, (_, _, trip_u, j) in transfers.from_trip_stop(trip, i):
+								enqueue(trip_u, j, n+1)
+			n += 1
+
+		return results

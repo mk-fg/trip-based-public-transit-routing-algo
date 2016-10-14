@@ -18,8 +18,10 @@ class SolutionStatus(enum.Enum):
 	undecidable = ...
 
 
-@u.attr_struct
-class Stop: keys = 'id name lon lat'
+@u.attr_struct(hash=False)
+class Stop:
+	keys = 'id name lon lat'
+	def __hash__(self): return hash(self.id)
 
 class Stops:
 	def __init__(self): self.set_idx = dict()
@@ -63,17 +65,18 @@ class TripStop:
 	dts_arr = u.attr_init(convert=trip_stop_daytime)
 	dts_dep = u.attr_init(convert=trip_stop_daytime)
 
-@u.attr_struct
+@u.attr_struct(hash=False)
 class Trip:
 	stops = u.attr_init(list)
 	id = u.attr_init(lambda seq=iter(range(2**40)): next(seq))
+	def __hash__(self): return hash(self.id)
 
 	def add(self, stop): self.stops.append(stop)
 
 	def compare(self, trip):
 		'Return SolutionStatus for this trip as compared to other trip.'
-		check = set( # True: a ≺ b, False: b ≺ a, None: a == b
-			(None if sa.dts_arr == sb.dts_arr else sa.dts_arr <= sb.dts_arr)
+		check = set(
+			(None if sa.dts_arr == sb.dts_arr else sa.dts_arr < sb.dts_arr)
 			for sa, sb in zip(self, trip) ).difference([None])
 		if len(check) == 1: return SolutionStatus(check.pop())
 		if not check: return SolutionStatus.equal
