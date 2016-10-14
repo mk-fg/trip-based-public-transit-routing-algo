@@ -14,8 +14,6 @@ class Conf:
 	footpath_speed_kmh = 5 / 3600
 	footpath_dt_max = 7*60 # all footpaths longer than that are discarded as invalid
 
-conf = Conf() # XXX: placeholder
-
 
 def iter_gtfs_tuples(gtfs_dir, filename):
 	if filename.endswith('.txt'): filename = filename[:-4]
@@ -29,7 +27,7 @@ def parse_gtfs_dts(ts_str):
 	if ':' not in ts_str: return
 	return sum((mul * int(v)) for mul, v in zip([3600, 60, 1], ts_str.split(':')))
 
-def footpath_dt(stop_a, stop_b, math=math):
+def footpath_dt(stop_a, stop_b, dt_base, speed_kmh, math=math):
 	'''Calculate footpath time-delta (dt) between two stops,
 		based on their lon/lat distance (using Haversine Formula) and walking-speed constant.'''
 	# Alternative: use UTM coordinates and KDTree (e.g. scipy) or spatial dbs
@@ -39,9 +37,9 @@ def footpath_dt(stop_a, stop_b, math=math):
 	km = 6367 * 2 * math.asin(math.sqrt(
 		math.sin((lat2 - lat1)/2)**2 +
 		math.cos(lat1) * math.cos(lat2) * math.sin((lon2 - lon1)/2)**2 ))
-	return conf.footpath_dt_base + km / conf.footpath_speed_kmh
+	return dt_base + km / speed_kmh
 
-def parse_gtfs_timetable(gtfs_dir):
+def parse_gtfs_timetable(gtfs_dir, conf):
 	'Parse Timetable from GTFS data directory.'
 	types = tb.t.public
 
@@ -69,8 +67,10 @@ def parse_gtfs_timetable(gtfs_dir):
 		if trip: trips.add(trip)
 
 	footpaths = types.Footpaths()
+	fp_dt = ft.partial( footpath_dt,
+		dt_base=conf.footpath_dt_base, speed_kmh=conf.footpath_speed_kmh )
 	for stop_a, stop_b in it.combinations(list(stops), 2):
-		footpaths.add(stop_a, stop_b, footpath_dt(stop_a, stop_b))
+		footpaths.add(stop_a, stop_b, fp_dt(stop_a, stop_b))
 	footpaths.discard_longer(conf.footpath_dt_max)
 
 	log.debug(
@@ -94,7 +94,6 @@ def main(args=None):
 		description='Simple implementation of graph-db and algos on top of that.')
 	parser.add_argument('gtfs_dir', help='Path to gtfs data directory to build graph from.')
 	parser.add_argument('-d', '--debug', action='store_true', help='Verbose operation mode.')
-
 	opts = parser.parse_args(sys.argv[1:] if args is None else args)
 
 	global log
@@ -104,7 +103,8 @@ def main(args=None):
 		level=tb.u.logging.DEBUG if opts.debug else tb.u.logging.WARNING )
 	log = tb.u.get_logger('main')
 
-	timetable = calc_timer(parse_gtfs_timetable, Path(opts.gtfs_dir))
+	conf = Conf()
+	timetable = calc_timer(parse_gtfs_timetable, Path(opts.gtfs_dir), conf)
 	router = tb.engine.TBRoutingEngine(timetable, timer_func=calc_timer)
 
 if __name__ == '__main__': sys.exit(main())
