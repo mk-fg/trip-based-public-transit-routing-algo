@@ -14,7 +14,7 @@ pushd "$otp_src_dir" >/dev/null
 files=( $(git status -uno --porcelain | awk '{print $NF}') )
 rsync -t "$otp_src" "$otp_jar"
 zip "$otp_jar" "${files[@]}"
-mv "$otp_jar" "$otp_dst"
+rsync -t "$otp_jar" "$otp_dst"
 popd >/dev/null
 
 exec java -Xmx"$mem" -jar "$otp_jar" --build "$data" --inMemory
