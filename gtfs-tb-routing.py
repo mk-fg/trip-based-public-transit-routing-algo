@@ -94,6 +94,10 @@ def main(args=None):
 	parser = argparse.ArgumentParser(
 		description='Simple implementation of graph-db and algos on top of that.')
 	parser.add_argument('gtfs_dir', help='Path to gtfs data directory to build graph from.')
+
+	parser.add_argument('stop_from', help='Stop ID to query journey from. Example: J22209723_0')
+	parser.add_argument('stop_to', help='Stop ID to query journey to. Example: J2220952426_0')
+
 	parser.add_argument('-d', '--debug', action='store_true', help='Verbose operation mode.')
 	opts = parser.parse_args(sys.argv[1:] if args is None else args)
 
@@ -108,13 +112,7 @@ def main(args=None):
 	timetable = calc_timer(parse_gtfs_timetable, Path(opts.gtfs_dir), conf)
 	router = tb.engine.TBRoutingEngine(timetable, timer_func=calc_timer)
 
-	### Run query between two random stops
-	import random
-	stops = list(timetable.stops)
-	a = random.choice(stops)
-	while True:
-		b = random.choice(stops)
-		if b is not a: break
+	a, b = timetable.stops[opts.stop_from], timetable.stops[opts.stop_to]
 	print(router.query_earliest_arrival(a, b, 0))
 
 if __name__ == '__main__': sys.exit(main())

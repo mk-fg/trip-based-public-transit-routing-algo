@@ -178,6 +178,9 @@ class TBRoutingEngine:
 
 	@timer
 	def query_earliest_arrival(self, stop_src, stop_dst, dts_src):
+		'''Algorithm 4: Earliest arrival query.
+			Actually a bicriteria query that also finds
+				min-transfer journeys as well, just called that in the paper.'''
 		timetable, lines, transfers = self.graph
 
 		R, Q = dict(), dict()
@@ -201,6 +204,7 @@ class TBRoutingEngine:
 		for line_infos in lines_to_dst.values():
 			line_infos.sort(reverse=True, key=op.itemgetter(0))
 
+		# Queue initial set of trips (reachable from stop_src) to examine
 		for stop_q in timetable.stops:
 			if stop_q is stop_src: dt_fp = 0
 			else:
@@ -211,6 +215,7 @@ class TBRoutingEngine:
 					trip = line.earliest_trip(i, dts_q)
 					if trip: enqueue(trip, i, 0)
 
+		# Main loop
 		t_min, n, results = u.inf, 0, list()
 		while Q:
 			for trip, b, e in Q.pop(n):
