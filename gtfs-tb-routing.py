@@ -98,6 +98,10 @@ def main(args=None):
 	parser.add_argument('stop_from', help='Stop ID to query journey from. Example: J22209723_0')
 	parser.add_argument('stop_to', help='Stop ID to query journey to. Example: J2220952426_0')
 
+	parser.add_argument('-c', '--cache', metavar='path',
+		help='Pickle cache-file to load (if exists)'
+			' or save (if missing) resulting graph data from/to.')
+
 	parser.add_argument('-d', '--debug', action='store_true', help='Verbose operation mode.')
 	opts = parser.parse_args(sys.argv[1:] if args is None else args)
 
@@ -109,8 +113,15 @@ def main(args=None):
 	log = tb.u.get_logger('main')
 
 	conf = Conf()
-	timetable = calc_timer(parse_gtfs_timetable, Path(opts.gtfs_dir), conf)
-	router = tb.engine.TBRoutingEngine(timetable, timer_func=calc_timer)
+	router_factory = ft.partial(tb.engine.TBRoutingEngine, timer_func=calc_timer)
+	if opts.cache: graph = tb.u.pickle_load(opts.cache)
+	if not graph:
+		timetable = calc_timer(parse_gtfs_timetable, Path(opts.gtfs_dir), conf)
+		router = router_factory(timetable)
+		if opts.cache: tb.u.pickle_dump(graph, opts.cache)
+	else:
+		timetable = graph.timetable
+		router = router_factory(cached_graph=graph)
 
 	a, b = timetable.stops[opts.stop_from], timetable.stops[opts.stop_to]
 	print(router.query_earliest_arrival(a, b, 0))

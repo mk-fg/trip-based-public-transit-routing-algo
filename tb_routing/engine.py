@@ -6,21 +6,19 @@ from . import utils as u, types as t
 
 class TBRoutingEngine:
 
+	graph = None
 	dt_ch = 5*60 # fixed time-delta overhead for changing trips
 
-	def __init__(self, timetable, timer_func=None):
+	def __init__(self, timetable=None, cached_graph=None, timer_func=None):
 		'''Creates Trip-Based Routing Engine from Timetable data.'''
 		self.log = u.get_logger('tb')
 		self.timer_wrapper = timer_func if timer_func else lambda f,*a,**k: func(*a,**k)
 
-		pickle_cache = None
-		if u.use_pickle_cache: pickle_cache = u.pickle_load()
-		if pickle_cache: graph = pickle_cache
-		else:
+		graph = cached_graph
+		if not graph:
 			lines = self.timetable_lines(timetable)
 			transfers = self.precalc_transfer_set(timetable, lines)
 			graph = t.internal.Graph(timetable, lines, transfers)
-		if u.use_pickle_cache and not pickle_cache: u.pickle_dump(graph)
 		self.graph = graph
 
 
