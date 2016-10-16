@@ -1,0 +1,77 @@
+diff --git a/client/js/otp/layers/StopsLayer.js b/client/js/otp/layers/StopsLayer.js
+index 94b8898..8809473 100644
+--- a/client/js/otp/layers/StopsLayer.js
++++ b/client/js/otp/layers/StopsLayer.js
+@@ -29,7 +29,7 @@ otp.layers.StopsLayer =
+ 
+     module : null,
+ 
+-    minimumZoomForStops : 15,
++    minimumZoomForStops : 0,
+ 
+     initialize : function(module) {
+         var this_ = this;
+@@ -107,12 +107,13 @@ otp.layers.StopsLayer =
+         var routes_stop_trans = _tr('Routes Serving Stop');
+ 
+         // TriMet-specific code
++        var stopId = stop.id.split(':')[1];
+         if(stop.url && stop.url.indexOf("http://trimet.org") === 0) {
+-            var stopId = stop.id.split(':')[1];
+             stop.titleLink = 'http://www.trimet.org/go/cgi-bin/cstops.pl?action=entry&resptype=U&lang=en&noCat=Landmark&Loc=' + stopId;
+         }
+         var context = _.clone(stop);
+         context.agencyStopLinkText = otp.config.agencyStopLinkText || "Agency Stop URL";
++        context.stop_id = stopId;
+         context.stop_viewer = stop_viewer_trans;
+         context.routes_on_stop = routes_stop_trans;
+         context.plan_trip = plan_trip_trans;
+diff --git a/client/js/otp/layers/layers-templates.html b/client/js/otp/layers/layers-templates.html
+index 6ee2845..1bd1d1c 100644
+--- a/client/js/otp/layers/layers-templates.html
++++ b/client/js/otp/layers/layers-templates.html
+@@ -11,17 +11,19 @@
+             <div style="font-style: italic; font-size: 11px;">{{desc}}</div>
+         {{/desc}}
+ 
++        <div>Stop id: {{stop_id}}</div>
++
+         <div style="font-size: 10px;">
+             [
+-			<a href="#" class="stopViewerLink">{{stop_viewer}}</a>
++            <a href="#" class="stopViewerLink">{{stop_viewer}}</a>
+             {{#url}}
+                 | <a href="{{url}}" target="_blank">{{agencyStopLinkText}}</a>
+             {{/url}}
+             ]
+         </div>
+-		<div style="margin-top: 6px;"><b>{{plan_trip}}</b>: [ <a href="#" class="planFromLink">{{from_stop}}</a> | <a href="#" class="planToLink">{{to_stop}}</a> ]</div>
++        <div style="margin-top: 6px;"><b>{{plan_trip}}</b>: [ <a href="#" class="planFromLink">{{from_stop}}</a> | <a href="#" class="planToLink">{{to_stop}}</a> ]</div>
+         <div style="margin-top: 6px;" >
+-			<b>{{routes_on_stop}}</b>:
++            <b>{{routes_on_stop}}</b>:
+             <ul class="routeList"/>
+         </div>
+     </div>
+diff --git a/client/js/otp/modules/planner/ItinerariesWidget.js b/client/js/otp/modules/planner/ItinerariesWidget.js
+index fcfbb8d..88c682d 100644
+--- a/client/js/otp/modules/planner/ItinerariesWidget.js
++++ b/client/js/otp/modules/planner/ItinerariesWidget.js
+@@ -560,7 +560,7 @@ otp.widgets.ItinerariesWidget =
+             }
+ 
+             //TRANSLATORS: Depart station / Board at station in itinerary
+-            var startHtml = '<div class="otp-itin-leg-endpointDesc">' + (leg.interlineWithPreviousLeg ? "<b>" + pgettext("itinerary", "Depart") + "</b> " : _tr("<b>Board</b> at ")) +leg.from.name;
++            var startHtml = '<div class="otp-itin-leg-endpointDesc">' + (leg.interlineWithPreviousLeg ? "<b>" + pgettext("itinerary", "Depart") + "</b> " : _tr("<b>Board</b> at ")) +leg.from.name + " [ " + leg.from.stopId.split(':')[1] + " ]";
+             if(otp.config.municoderHostname) {
+                 var spanId = this.newMunicoderRequest(leg.from.lat, leg.from.lon);
+                 startHtml += '<span id="'+spanId+'"></span>';
+@@ -672,7 +672,7 @@ otp.widgets.ItinerariesWidget =
+             //TRANSLATORS: Stay on board/Alight [at stop name]
+             var endAction = (nextLeg && nextLeg.interlineWithPreviousLeg) ? _tr("Stay on board") : _tr("Alight");
+             //TRANSLATORS: [Stay on board/Alight] at [stop name]
+-            var endHtml = '<div class="otp-itin-leg-endpointDesc"><b>' + endAction + '</b> ' + _tr('at')+ ' ' +leg.to.name;
++            var endHtml = '<div class="otp-itin-leg-endpointDesc"><b>' + endAction + '</b> ' + _tr('at')+ ' ' +leg.to.name + ' [ ' + leg.to.stopId.split(':')[1] + ' ]';
+             if(otp.config.municoderHostname) {
+                 spanId = this.newMunicoderRequest(leg.to.lat, leg.to.lon);
+                 endHtml += '<span id="'+spanId+'"></span>';

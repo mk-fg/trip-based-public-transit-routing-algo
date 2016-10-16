@@ -1,0 +1,15 @@
+Title: Shimada City
+Downloaded from: https://transit.land/feed-registry/operators/o-xn4n-島田市
+Date: 2016-10-13
+
+Onestop ID: o-xn4n-島田市
+Region:: Shimada
+State: Shizuoka
+Country: Japan
+Website: https://www.city.shimada.shizuoka.jp/bouhan/komibus.html
+Timezone: Asia/Tokyo
+
+Feed:
+	Onestop ID: f-xn4n-島田市
+	Data location: http://opentrans.it/feed/gtfs/5724160613416960/gtfs.zip
+	License: CC BY 4.0 - https://creativecommons.org/licenses/by/4.0/
