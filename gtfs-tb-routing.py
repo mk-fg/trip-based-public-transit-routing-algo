@@ -114,11 +114,11 @@ def main(args=None):
 
 	conf = Conf()
 	router_factory = ft.partial(tb.engine.TBRoutingEngine, timer_func=calc_timer)
-	if opts.cache: graph = tb.u.pickle_load(opts.cache)
+	graph = tb.u.pickle_load(opts.cache) if opts.cache else None
 	if not graph:
 		timetable = calc_timer(parse_gtfs_timetable, Path(opts.gtfs_dir), conf)
 		router = router_factory(timetable)
-		if opts.cache: tb.u.pickle_dump(graph, opts.cache)
+		if opts.cache: tb.u.pickle_dump(router.graph, opts.cache)
 	else:
 		timetable = graph.timetable
 		router = router_factory(cached_graph=graph)
