@@ -79,9 +79,9 @@ class TBRoutingEngine:
 	@timer
 	def precalc_transfer_set(self, timetable, lines):
 		# Precalculation steps here are not merged and not parallelized in any way.
-		transfers = self._pre_initial_set(timetable, lines)
-		transfers = self._pre_remove_u_turns(transfers)
-		transfers = self._pre_reduction(timetable, transfers)
+		transfers = self._pre_initial_set(timetable, lines) # Algorithm 1
+		transfers = self._pre_remove_u_turns(transfers) # Algorithm 2
+		transfers = self._pre_reduction(timetable, transfers) # Algorithm 3
 		self.log.debug('Precalculated transfer set size: {:,}', len(transfers))
 		return transfers
 
@@ -126,44 +126,44 @@ class TBRoutingEngine:
 	@timer
 	def _pre_reduction(self, timetable, transfers):
 		'Algorithm 3: Transfer reduction.'
-		stop_arr, stop_ch = dict(), dict()
 
-		def update_min_value(stop_map, stop, dts):
-			if dts < stop_map.get(stop, u.inf):
-				stop_map[stop] = dts
+		def update_min_time(min_time_map, stop, dts):
+			if dts < min_time_map.get(stop, u.inf):
+				min_time_map[stop] = dts
 				return True
 			return False
 
 		discarded_n, progress = 0, self.progress_iter('pre_reduction', len(timetable.trips))
 		for trip_t in timetable.trips:
+			min_time_arr, min_time_ch = dict(), dict()
 			progress.send([ 'transfer set size: {:,},'
 				' discarded (so far): {:,}', len(transfers), discarded_n ])
 
 			for i in range(len(trip_t)-1, 0, -1): # first stop is skipped here as well
 				ts_p, transfers_discard = trip_t[i], list()
-				update_min_value(stop_arr, ts_p.stop, ts_p.dts_arr)
+				update_min_time(min_time_arr, ts_p.stop, ts_p.dts_arr)
 
 				for stop_q in timetable.stops:
 					try: dt_fp_pq = timetable.footpaths[ts_p.stop, stop_q]
 					except KeyError: continue
 					dts_q = ts_p.dts_arr + dt_fp_pq
 
-					update_min_value(stop_arr, stop_q, dts_q)
-					update_min_value(stop_ch, stop_q, dts_q)
+					update_min_time(min_time_arr, stop_q, dts_q)
+					update_min_time(min_time_ch, stop_q, dts_q)
 
 				for transfer_id, (_, _, trip_u, j) in transfers.from_trip_stop(trip_t, i):
 					keep = False
 
 					for k in range(j+1, len(trip_u)):
 						ts_u = trip_u[k]
-						keep = keep | update_min_value(stop_arr, ts_u.stop, ts_u.dts_arr)
+						keep = keep | update_min_time(min_time_arr, ts_u.stop, ts_u.dts_arr)
 
 						for stop_q in timetable.stops:
 							try: dt_fp_pq = timetable.footpaths[ts_u.stop, stop_q]
 							except KeyError: continue
 							dts_q = ts_u.dts_arr + dt_fp_pq
-							keep = keep | update_min_value(stop_arr, stop_q, dts_q)
-							keep = keep | update_min_value(stop_ch, stop_q, dts_q)
+							keep = keep | update_min_time(min_time_arr, stop_q, dts_q)
+							keep = keep | update_min_time(min_time_ch, stop_q, dts_q)
 
 					if not keep: transfers_discard.append(transfer_id)
 
