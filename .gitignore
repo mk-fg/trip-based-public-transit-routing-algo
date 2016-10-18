@@ -8,3 +8,7 @@
 # Misc clutter
 /cache
 *.pyc
+
+# Test caches
+/test/*.cache.pickle
+/test/*.data.unzip/
