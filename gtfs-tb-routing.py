@@ -56,7 +56,8 @@ def parse_gtfs_timetable(gtfs_dir, conf):
 	trips, stops = types.Trips(), types.Stops()
 	for t in iter_gtfs_tuples(gtfs_dir, 'trips'):
 		trip = types.Trip()
-		for ts in sorted(trip_stops[t.trip_id], key=lambda t: int(t.stop_sequence)):
+		for stopidx, ts in enumerate(
+				sorted(trip_stops[t.trip_id], key=lambda t: int(t.stop_sequence)) ):
 			dts_arr, dts_dep = map(parse_gtfs_dts, [ts.arrival_time, ts.departure_time])
 			if not dts_arr:
 				if not trip: # first stop of the trip - arrival ~ departure
@@ -65,8 +66,7 @@ def parse_gtfs_timetable(gtfs_dir, conf):
 				else: dts_arr = trip[-1].dts_dep # "scheduled based on the nearest preceding timed stop"
 			if not dts_dep: dts_dep = dts_arr + conf.stop_linger_time_default
 			stops.add(stops_dict[ts.stop_id])
-			trip.add(types.TripStop(
-				stop=stops[ts.stop_id], dts_arr=dts_arr, dts_dep=dts_dep ))
+			trip.add(types.TripStop(trip, stopidx, stops[ts.stop_id], dts_arr, dts_dep))
 		if trip: trips.add(trip)
 
 	footpaths = types.Footpaths()
@@ -78,7 +78,7 @@ def parse_gtfs_timetable(gtfs_dir, conf):
 
 	log.debug(
 		'Parsed timetable: stops={}, footpaths={} (mean_dt={:.1f}s), trips={} (mean_stops={:.1f})',
-		len(stops), len(footpaths), footpaths.mean_dt(), len(trips), trips.mean_stops() )
+		len(stops), len(footpaths), footpaths.stat_mean_dt(), len(trips), trips.stat_mean_stops() )
 	return types.Timetable(stops, footpaths, trips)
 
 
@@ -100,7 +100,7 @@ def init_gtfs_router(gtfs_dir, cache_path=None, conf=None, timer_func=None):
 	if not graph:
 		timetable = timetable_func(Path(gtfs_dir), conf)
 		router = router_factory(timetable)
-		if cache: tb.u.pickle_dump(router.graph, cache_path)
+		if cache_path: tb.u.pickle_dump(router.graph, cache_path)
 	else:
 		timetable = graph.timetable
 		router = router_factory(cached_graph=graph)

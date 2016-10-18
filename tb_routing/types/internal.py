@@ -15,6 +15,11 @@ class Line:
 
 	def __init__(self, *trips): self.set_idx = list(trips)
 
+	@property
+	def stops(self):
+		'Sequence of Stops for all of the Trips on this Line.'
+		return list(map(op.attrgetter('stop'), self.set_idx[0].stops))
+
 	def add(self, *trips):
 		self.set_idx.extend(trips)
 		self.set_idx.sort(key=lambda trip: sum(map(op.attrgetter('dts_arr'), trip)))
@@ -68,6 +73,7 @@ class TransferSet:
 		return trip.id, trip[stopidx].stop.id
 
 	def add(self, transfer):
+		# Second mapping is used purely for more efficient O(1) removals
 		k = self._trip_stop_key(transfer.trip_from, transfer.stopidx_from)
 		self.set_idx.setdefault(k, dict())[len(self.set_idx[k])] = transfer
 

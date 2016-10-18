@@ -47,7 +47,7 @@ class Footpaths:
 		n = bisect.bisect_left(items, (dt_max, ''))
 		for v,k in items[n:]: del self.set_idx[k]
 
-	def mean_dt(self):
+	def stat_mean_dt(self):
 		return sum(self.set_idx.values()) / len(self.set_idx)
 
 	def __getitem__(self, stop_tuple):
@@ -59,13 +59,21 @@ class Footpaths:
 
 trip_stop_daytime = lambda dts: dts % (24 * 3600)
 
-@u.attr_struct
+@u.attr_struct(hash=False, repr=False)
 class TripStop:
+	trip = u.attr_init()
+	stopidx = u.attr_init()
 	stop = u.attr_init()
 	dts_arr = u.attr_init(convert=trip_stop_daytime)
 	dts_dep = u.attr_init(convert=trip_stop_daytime)
 
-@u.attr_struct(hash=False)
+	def __hash__(self): return hash((self.trip, self.stopidx))
+	def __repr__(self): # mostly to avoid recursion
+		return ( 'TripStop('
+			'trip_id={0.trip.id}, trip_idx={0.stopidx}, stop={0.stop},'
+			' dts_arr={0.dts_arr}, dts_dep={0.dts_dep})' ).format(self)
+
+@u.attr_struct(hash=False, cmp=False)
 class Trip:
 	stops = u.attr_init(list)
 	id = u.attr_init(lambda seq=iter(range(2**40)): next(seq))
@@ -87,11 +95,8 @@ class Trip:
 	def __iter__(self): return iter(self.stops)
 
 class Trips(UserList):
-
 	def add(self, trip): self.append(trip)
-
-	def mean_stops(self):
-		return sum(len(t.stops) for t in self) / len(self)
+	def stat_mean_stops(self): return sum(len(t) for t in self) / len(self)
 
 
 @u.attr_struct
