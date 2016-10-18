@@ -1,0 +1,20 @@
+
+- Fix remaining querying issues, so that at least all journeys that
+  OpenTripPlanner can find are returned.
+
+- Return trip segments for journey results, not just (dt, transfers) tuples.
+
+- Implement calendar processing and checks during queries.
+
+- Implement profile queries and algo optimizations from the arXiv:1607.01299v2
+  paper.
+
+- Add processing for transfers.txt and similar directional/pre-calculated
+  "footpath"-like data, instead of generating it from stop locations.
+
+- Some interactive querying interface for the thing would be nice to have - can
+  be simple WebUI or something like ipynb.
+
+- Implement more complex criterias for "stop change time", fares, priorities and
+  similar things, which are currently either simplified to fixed values
+  (e.g. TBRoutingEngine.dt_ch) or not considered at all.
