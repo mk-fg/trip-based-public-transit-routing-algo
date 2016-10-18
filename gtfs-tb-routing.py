@@ -14,6 +14,8 @@ class Conf:
 	footpath_speed_kmh = 5 / 3600
 	footpath_dt_max = 7*60 # all footpaths longer than that are discarded as invalid
 
+log = tb.u.get_logger('gtfs-cli')
+
 
 def iter_gtfs_tuples(gtfs_dir, filename):
 	if filename.endswith('.txt'): filename = filename[:-4]
@@ -89,6 +91,21 @@ def calc_timer(func, *args, log=tb.u.get_logger('timer'), **kws):
 	log.debug('[{}] Finished in: {:.1f}s', func_id, td)
 	return data
 
+def init_gtfs_router(gtfs_dir, cache_path=None, conf=None, timer_func=None):
+	if not conf: conf = Conf()
+	timetable_func = parse_gtfs_timetable\
+		if not timer_func else ft.partial(timer_func, parse_gtfs_timetable)
+	router_factory = ft.partial(tb.engine.TBRoutingEngine, timer_func=timer_func)
+	graph = tb.u.pickle_load(cache_path) if cache_path else None
+	if not graph:
+		timetable = timetable_func(Path(gtfs_dir), conf)
+		router = router_factory(timetable)
+		if cache: tb.u.pickle_dump(router.graph, cache_path)
+	else:
+		timetable = graph.timetable
+		router = router_factory(cached_graph=graph)
+	return timetable, router
+
 def main(args=None):
 	import argparse
 	parser = argparse.ArgumentParser(
@@ -105,24 +122,14 @@ def main(args=None):
 	parser.add_argument('-d', '--debug', action='store_true', help='Verbose operation mode.')
 	opts = parser.parse_args(sys.argv[1:] if args is None else args)
 
-	global log
 	tb.u.logging.basicConfig(
 		format='%(asctime)s :: %(name)s %(levelname)s :: %(message)s',
 		datefmt='%Y-%m-%d %H:%M:%S',
 		level=tb.u.logging.DEBUG if opts.debug else tb.u.logging.WARNING )
-	log = tb.u.get_logger('main')
 
-	conf = Conf()
-	router_factory = ft.partial(tb.engine.TBRoutingEngine, timer_func=calc_timer)
-	graph = tb.u.pickle_load(opts.cache) if opts.cache else None
-	if not graph:
-		timetable = calc_timer(parse_gtfs_timetable, Path(opts.gtfs_dir), conf)
-		router = router_factory(timetable)
-		if opts.cache: tb.u.pickle_dump(router.graph, opts.cache)
-	else:
-		timetable = graph.timetable
-		router = router_factory(cached_graph=graph)
+	timetable, router = init_gtfs_router(opts.gtfs_dir, opts.cache, timer_func=calc_timer)
 
+	# XXX: some interactive querying interface
 	a, b = timetable.stops[opts.stop_from], timetable.stops[opts.stop_to]
 	print(router.query_earliest_arrival(a, b, 0))
 

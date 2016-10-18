@@ -1,4 +1,5 @@
 import itertools as it, operator as op, functools as ft
+from pathlib import Path
 import os, sys, logging
 
 import attr
@@ -53,15 +54,15 @@ pickle_log = get_logger('pickle')
 
 def pickle_dump(state, name=use_pickle_cache or 'state.pickle'):
 	import pickle
-	with open(name, 'wb') as dst:
+	with open(str(name), 'wb') as dst:
 		pickle_log.debug('Pickling data (type: {}) to: {}', state.__class__.__name__, name)
 		pickle.dump(state, dst)
 
 def pickle_load(name=use_pickle_cache or 'state.pickle', fail=False):
 	import pickle
 	try:
-		with open(name, 'rb') as src:
+		with open(str(name), 'rb') as src:
 			pickle_log.debug('Unpickling data from: {}', name)
 			return pickle.load(src)
-	except OSError as err:
+	except Exception as err:
 		if fail: raise
