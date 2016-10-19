@@ -1,6 +1,6 @@
 import itertools as it, operator as op, functools as ft
 from collections import namedtuple, UserList
-import bisect, enum
+import bisect, enum, datetime
 
 from .. import utils as u
 
@@ -106,7 +106,7 @@ class Timetable: keys = 'stops footpaths trips'
 
 ### TBRoutingEngine query result - list of Journeys
 
-JourneyTrip = namedtuple('JTrip', 'trip_stop_from trip_stop_to')
+JourneyTrip = namedtuple('JTrip', 'ts_from ts_to')
 JourneyFp = namedtuple('JFootpath', 'stop_from stop_to dt')
 
 @u.attr_struct
@@ -130,3 +130,21 @@ class Journey:
 
 	def __len__(self): return len(self.segments)
 	def __iter__(self): return iter(self.segments)
+
+	def pretty_print(self, indent=0, **print_kws):
+		p = lambda tpl,*a,**k: print(' '*indent + tpl.format(*a,**k), **print_kws)
+		dts_format = lambda dts: datetime.time(dts // 3600, (dts % 3600) // 60, int(dts % 60), dts % 1)
+
+		p('Journey {:x}:', id(self))
+		for seg in self.segments:
+			if isinstance(seg, JourneyTrip):
+				p('  trip [{}]:', seg.ts_from.trip.id)
+				p( '    from (dep at {dts_dep}): {0.stopidx}:{0.stop.name} [{0.stop.id}]', seg.ts_from,
+					dts_arr=dts_format(seg.ts_from.dts_arr), dts_dep=dts_format(seg.ts_from.dts_dep) )
+				p( '    to (arr at {dts_arr}): {0.stopidx}:{0.stop.name} [{0.stop.id}]', seg.ts_to,
+					dts_arr=dts_format(seg.ts_to.dts_arr), dts_dep=dts_format(seg.ts_to.dts_dep) )
+			elif isinstance(seg, JourneyFp):
+				p('  footpath (time: {}):', datetime.timedelta(seconds=int(seg.dt)))
+				p('    from: {0.name} [{0.id}]', seg.stop_from)
+				p('    to: {0.name} [{0.id}]', seg.stop_to)
+			else: raise ValueError(seg)

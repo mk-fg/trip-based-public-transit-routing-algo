@@ -130,6 +130,12 @@ def main(args=None):
 	timetable, router = init_gtfs_router(opts.gtfs_dir, opts.cache, timer_func=calc_timer)
 
 	a, b = timetable.stops[opts.stop_from], timetable.stops[opts.stop_to]
-	print(router.query_earliest_arrival(a, b, 0))
+	journeys = router.query_earliest_arrival(a, b, 0)
+
+	print('Journeys found ({}):'.format(len(journeys)))
+	for journey in journeys:
+		print()
+		journey.pretty_print(indent=2)
+
 
 if __name__ == '__main__': sys.exit(main())
