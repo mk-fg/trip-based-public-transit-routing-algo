@@ -182,11 +182,17 @@ class TBRoutingEngine:
 		timetable, lines, transfers = self.graph
 
 		R, Q = dict(), dict()
-		trip_segment = namedtuple('TripSeg', 'trip stopidx_a stopidx_b')
-		def enqueue(trip, i, n, ss=t.public.SolutionStatus):
+		TripSegment = namedtuple('TripSeg', 'trip stopidx_a stopidx_b journey')
+
+		JourneyTrip = namedtuple('JTrip', 'trip_stop_from trip_stop_to')
+		JourneyFp = namedtuple('JFootpath', 'stop_from stop_to dt')
+		Journey = namedtuple('Journey', 'dts_arr trips segments')
+		journeys = list()
+
+		def enqueue(trip, i, n, journey, ss=t.public.SolutionStatus):
 			if i >= R.get(trip, u.inf): return
 			Q.setdefault(n, deque()).append(
-				trip_segment(trip, i, R.get(trip, len(trip)-1)) )
+				TripSegment(trip, i, R.get(trip, len(trip)-1), journey) )
 			for trip_u in lines.line_for_trip(trip)\
 					.trips_by_relation(trip, ss.non_dominated, ss.equal):
 				R[trip_u] = min(i, R.get(trip_u, u.inf))
@@ -204,34 +210,47 @@ class TBRoutingEngine:
 
 		# Queue initial set of trips (reachable from stop_src) to examine
 		for stop_q in timetable.stops: # XXX: add/use footpath-reachable index here
+			journey = list()
 			if stop_q is stop_src: dt_fp = 0
 			else:
 				try: dt_fp = timetable.footpaths[stop_src, stop_q]
 				except KeyError: continue
+				else: journey.append(JourneyFp(stop_src, stop_q, dt_fp))
 			dts_q = dts_src + dt_fp
 			for i, line in lines.lines_with_stop(stop_q):
 				trip = line.earliest_trip(i, dts_q)
 				## Note: footpath to first stop is not considered as +1 transfer here.
 				##   Only first-by-index fp-reachable stop on the Line will be queued.
 				##   Maybe some min(dt_fp) pre-enqueue filtering should be added here.
-				if trip: enqueue(trip, i, 0)
+				if trip: enqueue(trip, i, 0, journey)
 
 		# Main loop
-		t_min, n, results = u.inf, 0, list()
+		t_min, n = u.inf, 0
 		while Q:
-			for trip, b, e in Q.pop(n):
-				# Check if trip reaches stop_dst (using lines_to_dst)
-				for i, line, dts_hop in lines_to_dst.get(trip, list()):
-					if i <= b: break
-					line_dts = trip[i].dts_arr + dts_hop
-					if line_dts < t_min:
-						t_min = line_dts
-						results.append((t_min, n))
+			for trip, b, e, journey in Q.pop(n):
+
+				# Check if trip reaches stop_dst (or its footpath-vicinity) directly
+				for i_dst, line, dt_fp in lines_to_dst.get(trip, list()):
+					if i_dst <= b: break # can't reach previous stop
+					line_dts_dst = trip[i_dst].dts_arr + dt_fp
+					if line_dts_dst < t_min:
+						t_min = line_dts_dst
+						jn_dst = journey.copy()
+						jn_dst.append(JourneyTrip(trip[b], trip[i_dst]))
+						if dt_fp: jn_dst.append(JourneyFp(trip[i_dst].stop, stop_dst, dt_fp))
+						journeys.append(Journey(t_min, n, jn_dst))
+
 				# Check if trip can lead to nondominated journeys, and queue trips reachable from it
 				if trip[b+1].dts_arr < t_min:
 					for i in range(b+1, e+1): # b < i <= e
 						for k, (_, _, trip_u, j) in transfers.from_trip_stop(trip, i):
-							enqueue(trip_u, j, n+1)
+							jn_u = journey.copy()
+							jn_u.append(JourneyTrip(trip[b], trip[i]))
+							stop_i, stop_j = trip[i].stop, trip_u[j].stop
+							if stop_i is not stop_j:
+								jn_u.append(JourneyFp(stop_i, stop_j, timetable.footpaths[stop_i, stop_j]))
+							enqueue(trip_u, j, n+1, journey)
+
 			n += 1
 
-		return results
+		return journeys
