@@ -69,13 +69,12 @@ class TransferSet:
 
 	def __init__(self): self.set_idx = dict()
 
-	def _trip_stop_key(self, trip, stopidx):
-		return trip.id, trip[stopidx].stop.id
-
 	def add(self, transfer):
 		# Second mapping is used purely for more efficient O(1) removals
-		k = self._trip_stop_key(transfer.trip_from, transfer.stopidx_from)
-		self.set_idx.setdefault(k, dict())[len(self.set_idx[k])] = transfer
+		k1 = transfer.trip_from, transfer.stopidx_from
+		if k1 not in self.set_idx: self.set_idx[k1] = dict()
+		k2 = len(self.set_idx[k1])
+		self.set_idx[k1][k2] = transfer
 
 	def discard(self, keys):
 		for k1, k2 in keys:
@@ -83,7 +82,7 @@ class TransferSet:
 			if not self.set_idx[k1]: del self.set_idx[k1]
 
 	def from_trip_stop(self, trip, stopidx):
-		k1 = self._trip_stop_key(trip, stopidx)
+		k1 = trip, stopidx
 		for k2, transfer in self.set_idx.get(k1, dict()).items(): yield (k1, k2), transfer
 
 	def __len__(self): return sum(map(len, self.set_idx.values()))
