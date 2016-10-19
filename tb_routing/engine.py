@@ -181,13 +181,9 @@ class TBRoutingEngine:
 				min-transfer journeys as well, just called that in the paper.'''
 		timetable, lines, transfers = self.graph
 
+		journeys = list()
 		R, Q = dict(), dict()
 		TripSegment = namedtuple('TripSeg', 'trip stopidx_a stopidx_b journey')
-
-		JourneyTrip = namedtuple('JTrip', 'trip_stop_from trip_stop_to')
-		JourneyFp = namedtuple('JFootpath', 'stop_from stop_to dt')
-		Journey = namedtuple('Journey', 'dts_arr trips segments')
-		journeys = list()
 
 		def enqueue(trip, i, n, journey, ss=t.public.SolutionStatus):
 			if i >= R.get(trip, u.inf): return
@@ -210,12 +206,12 @@ class TBRoutingEngine:
 
 		# Queue initial set of trips (reachable from stop_src) to examine
 		for stop_q in timetable.stops: # XXX: add/use footpath-reachable index here
-			journey = list()
+			journey = t.public.Journey()
 			if stop_q is stop_src: dt_fp = 0
 			else:
 				try: dt_fp = timetable.footpaths[stop_src, stop_q]
 				except KeyError: continue
-				else: journey.append(JourneyFp(stop_src, stop_q, dt_fp))
+				else: journey.append_fp(stop_src, stop_q, dt_fp)
 			dts_q = dts_src + dt_fp
 			for i, line in lines.lines_with_stop(stop_q):
 				trip = line.earliest_trip(i, dts_q)
@@ -235,21 +231,19 @@ class TBRoutingEngine:
 					line_dts_dst = trip[i_dst].dts_arr + dt_fp
 					if line_dts_dst < t_min:
 						t_min = line_dts_dst
-						jn_dst = journey.copy()
-						jn_dst.append(JourneyTrip(trip[b], trip[i_dst]))
-						if dt_fp: jn_dst.append(JourneyFp(trip[i_dst].stop, stop_dst, dt_fp))
-						journeys.append(Journey(t_min, n, jn_dst))
+						jn_dst = journey.copy().append_trip(trip[b], trip[i_dst])
+						if dt_fp: jn_dst.append_fp(trip[i_dst].stop, stop_dst, dt_fp)
+						journeys.append(jn_dst)
 
 				# Check if trip can lead to nondominated journeys, and queue trips reachable from it
 				if trip[b+1].dts_arr < t_min:
 					for i in range(b+1, e+1): # b < i <= e
 						for k, (_, _, trip_u, j) in transfers.from_trip_stop(trip, i):
-							jn_u = journey.copy()
-							jn_u.append(JourneyTrip(trip[b], trip[i]))
+							jn_u = journey.copy().append_trip(trip[b], trip[i])
 							stop_i, stop_j = trip[i].stop, trip_u[j].stop
 							if stop_i is not stop_j:
-								jn_u.append(JourneyFp(stop_i, stop_j, timetable.footpaths[stop_i, stop_j]))
-							enqueue(trip_u, j, n+1, journey)
+								jn_u.append_fp(stop_i, stop_j, timetable.footpaths[stop_i, stop_j])
+							enqueue(trip_u, j, n+1, jn_u)
 
 			n += 1
 

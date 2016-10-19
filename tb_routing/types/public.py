@@ -1,21 +1,14 @@
-### TBRoutingEngine input data
-
-# "We consider public transit networks defined by an aperiodic
-#  timetable, consisting of a set of stops, a set of footpaths and a set of trips."
-
 import itertools as it, operator as op, functools as ft
-from collections import UserList
+from collections import namedtuple, UserList
 import bisect, enum
 
 from .. import utils as u
 
 
-class SolutionStatus(enum.Enum):
-	'Used as a result for solution (e.g. Trip) comparisons.'
-	dominated = False
-	non_dominated = True
-	equal = None
-	undecidable = ...
+### TBRoutingEngine input data
+
+# "We consider public transit networks defined by an aperiodic
+#  timetable, consisting of a set of stops, a set of footpaths and a set of trips."
 
 
 @u.attr_struct(hash=False)
@@ -59,6 +52,13 @@ class Footpaths:
 
 trip_stop_daytime = lambda dts: dts % (24 * 3600)
 
+class SolutionStatus(enum.Enum):
+	'Used as a result for solution (e.g. Trip) comparisons.'
+	dominated = False
+	non_dominated = True
+	equal = None
+	undecidable = ...
+
 @u.attr_struct(hash=False, repr=False)
 class TripStop:
 	trip = u.attr_init()
@@ -101,3 +101,32 @@ class Trips(UserList):
 
 @u.attr_struct
 class Timetable: keys = 'stops footpaths trips'
+
+
+
+### TBRoutingEngine query result - list of Journeys
+
+JourneyTrip = namedtuple('JTrip', 'trip_stop_from trip_stop_to')
+JourneyFp = namedtuple('JFootpath', 'stop_from stop_to dt')
+
+@u.attr_struct
+class Journey:
+	segments = u.attr_init(list)
+
+	@property
+	def dts_arr(self): raise NotImplementedError
+	@property
+	def trip_count(self): raise NotImplementedError
+
+	def copy(self): return Journey(self.segments.copy())
+
+	def append_trip(self, *jtrip_args, **jtrip_kws):
+		self.segments.append(JourneyTrip(*jtrip_args, **jtrip_kws))
+		return self
+
+	def append_fp(self, *jfp_args, **jfp_kws):
+		self.segments.append(JourneyFp(*jfp_args, **jfp_kws))
+		return self
+
+	def __len__(self): return len(self.segments)
+	def __iter__(self): return iter(self.segments)
