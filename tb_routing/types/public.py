@@ -49,8 +49,9 @@ class Footpaths:
 			self.set_idx.items() for k2,v in v1.items() if k1.id > k2.id )
 		return sum(unique_dt_set) / len(unique_dt_set)
 
-	def to_stops_from(self, stop): return self.set_idx[stop]
-	def from_stops_to(self, stop): return self.set_idx[stop]
+	def from_stops_to(self, stop): return self.set_idx[stop].items()
+	to_stops_from = from_stops_to
+
 	def time_delta(self, stop_from, stop_to): return self.set_idx[stop_from][stop_to]
 
 	def __len__(self): return len(self.set_idx)

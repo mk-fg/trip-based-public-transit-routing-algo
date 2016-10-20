@@ -94,7 +94,7 @@ class TBRoutingEngine:
 			for i, ts_p in enumerate(trip_t):
 				if i == 0: continue # "do not add any transfers from the first stop ..."
 
-				for stop_q, dt_fp in timetable.footpaths.to_stops_from(ts_p.stop).items():
+				for stop_q, dt_fp in timetable.footpaths.to_stops_from(ts_p.stop):
 					dts_q = ts_p.dts_arr + dt_fp
 					for j, line in lines.lines_with_stop(stop_q):
 						if j == len(line[0]) - 1: continue # "do not add any transfers ... to the last stop"
@@ -140,7 +140,7 @@ class TBRoutingEngine:
 				ts_p, transfers_discard = trip_t[i], list()
 				update_min_time(min_time_arr, ts_p.stop, ts_p.dts_arr)
 
-				for stop_q, dt_fp in timetable.footpaths.to_stops_from(ts_p.stop).items():
+				for stop_q, dt_fp in timetable.footpaths.to_stops_from(ts_p.stop):
 					dts_q = ts_p.dts_arr + dt_fp
 					update_min_time(min_time_arr, stop_q, dts_q)
 					update_min_time(min_time_ch, stop_q, dts_q)
@@ -152,7 +152,7 @@ class TBRoutingEngine:
 						ts_u = trip_u[k]
 						keep = keep | update_min_time(min_time_arr, ts_u.stop, ts_u.dts_arr)
 
-						for stop_q, dt_fp in timetable.footpaths.to_stops_from(ts_u.stop).items():
+						for stop_q, dt_fp in timetable.footpaths.to_stops_from(ts_u.stop):
 							dts_q = ts_u.dts_arr + dt_fp
 							keep = keep | update_min_time(min_time_arr, stop_q, dts_q)
 							keep = keep | update_min_time(min_time_ch, stop_q, dts_q)
@@ -187,7 +187,7 @@ class TBRoutingEngine:
 
 		lines_to_dst = dict() # (i, line, dt) indexed by trip
 		for stop_q, dt_fp in it.chain( [(stop_dst, 0)],
-				timetable.footpaths.from_stops_to(stop_dst).items() ):
+				timetable.footpaths.from_stops_to(stop_dst) ):
 			for i, line in lines.lines_with_stop(stop_q):
 				for trip in line: lines_to_dst.setdefault(trip, list()).append((i, line, dt_fp))
 		for line_infos in lines_to_dst.values(): # so that all "i > b" come up first
@@ -195,7 +195,7 @@ class TBRoutingEngine:
 
 		# Queue initial set of trips (reachable from stop_src) to examine
 		for stop_q, dt_fp in it.chain( [(stop_src, 0)],
-				timetable.footpaths.to_stops_from(stop_src).items() ):
+				timetable.footpaths.to_stops_from(stop_src) ):
 			dts_q = dts_src + dt_fp
 			journey = t.public.Journey()
 			if dt_fp: journey.append_fp(stop_src, stop_q, dt_fp)
