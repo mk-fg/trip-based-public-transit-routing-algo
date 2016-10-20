@@ -8,9 +8,11 @@ import os, sys, re, csv, math, time
 import tb_routing as tb
 
 
+@tb.u.attr_struct(vals_to_attrs=True)
 class Conf:
+	dt_ch = 2*60 # fixed time-delta overhead for changing trips (i.e. p->p footpaths)
 	stop_linger_time_default = 5*60 # used if departure-time is missing
-	footpath_dt_base = 1*60 # footpath_dt = dt_base + km / speed_kmh
+	footpath_dt_base = 3*60 # footpath_dt = dt_base + km / speed_kmh
 	footpath_speed_kmh = 5 / 3600
 	footpath_dt_max = 7*60 # all footpaths longer than that are discarded as invalid
 
@@ -29,10 +31,11 @@ def parse_gtfs_dts(ts_str):
 	if ':' not in ts_str: return
 	return sum((mul * int(v)) for mul, v in zip([3600, 60, 1], ts_str.split(':')))
 
-def footpath_dt(stop_a, stop_b, dt_base, speed_kmh, math=math):
+def footpath_dt(stop_a, stop_b, dt_ch, dt_base, speed_kmh, math=math):
 	'''Calculate footpath time-delta (dt) between two stops,
 		based on their lon/lat distance (using Haversine Formula) and walking-speed constant.'''
 	# Alternative: use UTM coordinates and KDTree (e.g. scipy) or spatial dbs
+	if stop_a is stop_b: return dt_ch
 	lon1, lat1, lon2, lat2 = (
 		math.radians(float(v)) for v in
 		[stop_a.lon, stop_a.lat, stop_b.lon, stop_b.lat] )
@@ -70,9 +73,9 @@ def parse_gtfs_timetable(gtfs_dir, conf):
 		if trip: trips.add(trip)
 
 	footpaths = types.Footpaths()
-	fp_dt = ft.partial( footpath_dt,
+	fp_dt = ft.partial( footpath_dt, dt_ch=conf.dt_ch,
 		dt_base=conf.footpath_dt_base, speed_kmh=conf.footpath_speed_kmh )
-	for stop_a, stop_b in it.combinations(list(stops), 2):
+	for stop_a, stop_b in it.combinations_with_replacement(list(stops), 2):
 		footpaths.add(stop_a, stop_b, fp_dt(stop_a, stop_b))
 	footpaths.discard_longer(conf.footpath_dt_max)
 

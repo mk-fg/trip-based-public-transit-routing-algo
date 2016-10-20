@@ -21,7 +21,7 @@ class LogStyleAdapter(logging.LoggerAdapter):
 get_logger = lambda name: LogStyleAdapter(logging.getLogger(name))
 
 
-def attr_struct(cls=None, **kws):
+def attr_struct(cls=None, vals_to_attrs=False, **kws):
 	if not cls: return ft.partial(attr_struct, **kws)
 	try:
 		keys = cls.keys
@@ -30,12 +30,16 @@ def attr_struct(cls=None, **kws):
 	else:
 		if isinstance(keys, str): keys = keys.split()
 		for k in keys: setattr(cls, k, attr.ib())
+	if vals_to_attrs:
+		for k, v in vars(cls):
+			if k in keys or callable(v): continue
+			setattr(cls, k, attr.ib(v))
 	kws.setdefault('slots', True)
 	return attr.s(cls, **kws)
 
-def attr_init(factory=None, **attr_kws):
-	factory = attr.Factory(factory) if factory else attr.NOTHING
-	return attr.ib(default=factory, **attr_kws)
+def attr_init(factory_or_default=attr.NOTHING, **attr_kws):
+	if callable(factory_or_default): factory_or_default = attr.Factory(factory_or_default)
+	return attr.ib(default=factory_or_default, **attr_kws)
 
 
 def coroutine(func):
