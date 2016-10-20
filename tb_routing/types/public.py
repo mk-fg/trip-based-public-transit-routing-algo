@@ -5,6 +5,14 @@ import bisect, enum, datetime
 from .. import utils as u
 
 
+class SolutionStatus(enum.Enum):
+	'Used as a result for solution (e.g. Trip) comparisons.'
+	dominated = False
+	non_dominated = True
+	equal = None
+	undecidable = ...
+
+
 ### TBRoutingEngine input data
 
 # "We consider public transit networks defined by an aperiodic
@@ -60,13 +68,6 @@ class Footpaths:
 
 trip_stop_daytime = lambda dts: dts % (24 * 3600)
 
-class SolutionStatus(enum.Enum):
-	'Used as a result for solution (e.g. Trip) comparisons.'
-	dominated = False
-	non_dominated = True
-	equal = None
-	undecidable = ...
-
 @u.attr_struct(hash=False, repr=False)
 class TripStop:
 	trip = u.attr_init()
@@ -112,38 +113,60 @@ class Timetable: keys = 'stops footpaths trips'
 
 
 
-### TBRoutingEngine query result - list of Journeys
+### TBRoutingEngine query result
 
 JourneyTrip = namedtuple('JTrip', 'ts_from ts_to')
 JourneyFp = namedtuple('JFootpath', 'stop_from stop_to dt')
 
-@u.attr_struct
+@u.attr_struct(slots=False, hash=False)
 class Journey:
 	segments = u.attr_init(list)
 
+	_stats_cache = None
+	def _stats(self):
+		if not self._stats_cache:
+			dts_arr, trip_count = 0, 0
+			for seg in self.segments:
+				if isinstance(seg, JourneyTrip):
+					dts_arr = seg.ts_to.dts_arr
+					trip_count += 1
+				elif isinstance(seg, JourneyFp):
+					dts_arr = dts_arr + seg.dt
+			self._stats_cache = dts_arr, trip_count
+		return self._stats_cache
+
 	@property
-	def dts_arr(self): raise NotImplementedError
+	def dts_arr(self): return self._stats()[0]
 	@property
-	def trip_count(self): raise NotImplementedError
+	def trip_count(self): return self._stats()[1]
 
 	def copy(self): return Journey(self.segments.copy())
 
 	def append_trip(self, *jtrip_args, **jtrip_kws):
 		self.segments.append(JourneyTrip(*jtrip_args, **jtrip_kws))
+		self._stats_cache = None
 		return self
 
 	def append_fp(self, *jfp_args, **jfp_kws):
 		self.segments.append(JourneyFp(*jfp_args, **jfp_kws))
+		self._stats_cache = None
 		return self
+
+	def compare(self, jn2, _ss=SolutionStatus):
+		'Return SolutionStatus for this journey as compared to other journey.'
+		if self.dts_arr == jn2.dts_arr and self.trip_count == jn2.trip_count: return _ss.equal
+		if self.dts_arr >= jn2.dts_arr and self.trip_count >= jn2.trip_count: return _ss.dominated
+		if self.dts_arr <= jn2.dts_arr and self.trip_count <= jn2.trip_count: return _ss.non_dominated
 
 	def __len__(self): return len(self.segments)
 	def __iter__(self): return iter(self.segments)
+	def __hash__(self): return id(self)
 
 	def pretty_print(self, indent=0, **print_kws):
 		p = lambda tpl,*a,**k: print(' '*indent + tpl.format(*a,**k), **print_kws)
 		dts_format = lambda dts: datetime.time(dts // 3600, (dts % 3600) // 60, int(dts % 60), dts % 1)
-
-		p('Journey {:x}:', id(self))
+		p( 'Journey {:x} (arrival: {}, trips: {}):',
+			id(self), dts_format(self.dts_arr), self.trip_count )
 		for seg in self.segments:
 			if isinstance(seg, JourneyTrip):
 				p('  trip [{}]:', seg.ts_from.trip.id)
@@ -155,4 +178,26 @@ class Journey:
 				p('  footpath (time: {}):', datetime.timedelta(seconds=int(seg.dt)))
 				p('    from: {0.name} [{0.id}]', seg.stop_from)
 				p('    to: {0.name} [{0.id}]', seg.stop_to)
-			else: raise ValueError(seg)
+
+
+@u.attr_struct
+class JourneySet:
+	journeys = u.attr_init(set)
+
+	def add(self, journey):
+		'''Add Journey, maintaining pareto-optimality of the set.'''
+		for jn2 in list(self.journeys):
+			ss = journey.compare(jn2)
+			if ss is SolutionStatus.dominated: break
+			if ( ss is SolutionStatus.non_dominated
+				and jn2.compare(journey) is SolutionStatus.dominated ): self.journeys.remove(jn2)
+		else: self.journeys.add(journey)
+
+	def __len__(self): return len(self.journeys)
+	def __iter__(self): return iter(self.journeys)
+
+	def pretty_print(self, indent=0, **print_kws):
+		print(' '*indent + 'Journey set ({}):'.format(len(self.journeys)))
+		for journey in self.journeys:
+			print()
+			journey.pretty_print(indent=indent+2, **print_kws)

@@ -14,7 +14,7 @@ class Conf:
 	stop_linger_time_default = 5*60 # used if departure-time is missing
 	footpath_dt_base = 3*60 # footpath_dt = dt_base + km / speed_kmh
 	footpath_speed_kmh = 5 / 3600
-	footpath_dt_max = 7*60 # all footpaths longer than that are discarded as invalid
+	footpath_dt_max = 8*60 # all footpaths longer than that are discarded as invalid
 
 log = tb.u.get_logger('gtfs-cli')
 
@@ -135,10 +135,6 @@ def main(args=None):
 	a, b = timetable.stops[opts.stop_from], timetable.stops[opts.stop_to]
 	journeys = router.query_earliest_arrival(a, b, 0)
 
-	print('Journeys found ({}):'.format(len(journeys)))
-	for journey in journeys:
-		print()
-		journey.pretty_print(indent=2)
-
+	journeys.pretty_print()
 
 if __name__ == '__main__': sys.exit(main())

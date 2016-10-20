@@ -178,16 +178,16 @@ class TBRoutingEngine:
 				min-transfer journeys as well, just called that in the paper.'''
 		timetable, lines, transfers = self.graph
 
-		journeys = list()
+		journeys = t.public.JourneySet()
 		R, Q = dict(), dict()
 		TripSegment = namedtuple('TripSeg', 'trip stopidx_a stopidx_b journey')
 
-		def enqueue(trip, i, n, journey, ss=t.public.SolutionStatus):
+		def enqueue(trip, i, n, journey, _ss=t.public.SolutionStatus):
 			if i >= R.get(trip, u.inf): return
 			Q.setdefault(n, deque()).append(
 				TripSegment(trip, i, R.get(trip, len(trip)-1), journey) )
 			for trip_u in lines.line_for_trip(trip)\
-					.trips_by_relation(trip, ss.non_dominated, ss.equal):
+					.trips_by_relation(trip, _ss.non_dominated, _ss.equal):
 				R[trip_u] = min(i, R.get(trip_u, u.inf))
 
 		lines_to_dst = dict() # (i, line, dt) indexed by trip
@@ -224,7 +224,7 @@ class TBRoutingEngine:
 						t_min = line_dts_dst
 						jn_dst = journey.copy().append_trip(trip[b], trip[i_dst])
 						if dt_fp: jn_dst.append_fp(trip[i_dst].stop, stop_dst, dt_fp)
-						journeys.append(jn_dst)
+						journeys.add(jn_dst)
 
 				# Check if trip can lead to nondominated journeys, and queue trips reachable from it
 				if trip[b+1].dts_arr < t_min:
