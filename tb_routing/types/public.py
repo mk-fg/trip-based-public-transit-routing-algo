@@ -125,20 +125,23 @@ class Journey:
 	_stats_cache = None
 	def _stats(self):
 		if not self._stats_cache:
-			dts_arr, trip_count = 0, 0
+			dts_arr = trip_count = fp_count = 0
 			for seg in self.segments:
 				if isinstance(seg, JourneyTrip):
 					dts_arr = seg.ts_to.dts_arr
 					trip_count += 1
 				elif isinstance(seg, JourneyFp):
 					dts_arr = dts_arr + seg.dt
-			self._stats_cache = dts_arr, trip_count
+					fp_count += 1
+			self._stats_cache = dts_arr, trip_count, fp_count
 		return self._stats_cache
 
 	@property
 	def dts_arr(self): return self._stats()[0]
 	@property
 	def trip_count(self): return self._stats()[1]
+	@property
+	def fp_count(self): return self._stats()[2]
 
 	def copy(self): return Journey(self.segments.copy())
 
@@ -154,7 +157,10 @@ class Journey:
 
 	def compare(self, jn2, _ss=SolutionStatus):
 		'Return SolutionStatus for this journey as compared to other journey.'
-		if self.dts_arr == jn2.dts_arr and self.trip_count == jn2.trip_count: return _ss.equal
+		if self.dts_arr == jn2.dts_arr and self.trip_count == jn2.trip_count:
+			# Consider footpath_count only if dts_arr and trip_count are equal
+			if self.fp_count == jn2.fp_count: return _ss.equal
+			return [_ss.dominated, _ss.non_dominated][self.fp_count < jn2.fp_count]
 		if self.dts_arr >= jn2.dts_arr and self.trip_count >= jn2.trip_count: return _ss.dominated
 		if self.dts_arr <= jn2.dts_arr and self.trip_count <= jn2.trip_count: return _ss.non_dominated
 
