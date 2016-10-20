@@ -1,5 +1,5 @@
 import itertools as it, operator as op, functools as ft
-from collections import namedtuple, UserList
+from collections import namedtuple, defaultdict, UserList
 import bisect, enum, datetime
 
 from .. import utils as u
@@ -26,25 +26,32 @@ class Stops:
 
 class Footpaths:
 
-	def __init__(self): self.set_idx = dict()
+	# XXX: these are currently bi-directional
+	# Which is why to_stops_from == from_stops_to and
+	#  "k1.id > k2.id" filter in stat_mean_dt gets "unique footpaths".
 
-	def _stop_pair_key(self, stop_a, stop_b):
-		# XXX: non-directional
-		return '\0'.join(sorted([stop_a.id, stop_b.id]))
+	def __init__(self): self.set_idx = defaultdict(dict)
 
 	def add(self, stop_a, stop_b, dt):
-		self.set_idx[self._stop_pair_key(stop_a, stop_b)] = dt
+		self.set_idx[stop_a][stop_b] = dt
+		self.set_idx[stop_b][stop_a] = dt
 
 	def discard_longer(self, dt_max):
-		items = list(sorted((v,k) for k,v in self.set_idx.items()))
-		n = bisect.bisect_left(items, (dt_max, ''))
-		for v,k in items[n:]: del self.set_idx[k]
+		items = list(sorted( (v,(k1,k2))
+			for k1,v1 in self.set_idx.items() for k2,v in v1.items() ))
+		n = bisect.bisect_left(items, (dt_max, ()))
+		for v,(k1,k2) in items[n:]:
+			del self.set_idx[k1][k2]
+			if not self.set_idx[k1]: del self.set_idx[k1]
 
 	def stat_mean_dt(self):
-		return sum(self.set_idx.values()) / len(self.set_idx)
+		unique_dt_set = list( v for k1,v1 in
+			self.set_idx.items() for k2,v in v1.items() if k1.id > k2.id )
+		return sum(unique_dt_set) / len(unique_dt_set)
 
-	def __getitem__(self, stop_tuple):
-		return self.set_idx[self._stop_pair_key(*stop_tuple)]
+	def to_stops_from(self, stop): return self.set_idx[stop]
+	def from_stops_to(self, stop): return self.set_idx[stop]
+	def time_delta(self, stop_from, stop_to): return self.set_idx[stop_from][stop_to]
 
 	def __len__(self): return len(self.set_idx)
 	def __iter__(self): return iter(self.set_idx.items())
