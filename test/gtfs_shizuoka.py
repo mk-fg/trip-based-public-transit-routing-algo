@@ -2,7 +2,7 @@ import itertools as it, operator as op, functools as ft
 from collections import ChainMap, Mapping, OrderedDict
 from pathlib import Path
 from pprint import pprint
-import os, sys, unittest, types, datetime
+import os, sys, unittest, types, datetime, re
 import runpy, tempfile, warnings, shutil, zipfile
 
 import yaml # PyYAML module is required for tests
@@ -70,14 +70,65 @@ class dmap(ChainMap):
 		for m in self.maps:
 			if k in m: del m[k]
 
+class FixedOffsetTZ(datetime.tzinfo):
+	_offset = _name = None
+	@classmethod
+	def from_offset(cls, name=None, delta=None, hh=None, mm=None):
+		self = cls()
+		if delta is None: delta = datetime.timedelta(hours=hh or 0, minutes=mm or 0)
+		self._name, self._offset = name, delta
+		return self
+	def utcoffset(self, dt): return self._offset
+	def tzname(self, dt): return self._name
+	def dst(self, dt, ZERO=datetime.timedelta(0)): return ZERO
+	def __repr__(self): return '<FixedOffset {!r}>'.format(self._name)
+
+TZ_UTC = FixedOffsetTZ.from_offset('UTC')
+
+def parse_iso8601( spec, tz_default=TZ_UTC,
+		_re=re.compile(
+			r'(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})'
+			r'(?::(?P<s>\d{2}(\.\d+)?))?\s*(?P<tz>Z|[-+]\d{2}:\d{2})?' ) ):
+	m = _re.search(spec)
+	if not m: raise ValueError(m)
+	if m.group('tz'):
+		tz = m.group('tz')
+		if tz == 'Z': tz = TZ_UTC
+		else:
+			k = {'+':1,'-':-1}[tz[0]]
+			hh, mm = ((int(n) * k) for n in tz[1:].split(':', 1))
+			tz = FixedOffsetTZ.from_offset(hh=hh, mm=mm)
+	else: tz = tz_default
+	ts_list = list(map(int, m.groups()[:5]))
+	ts_list.append(
+		0 if not m.group('s') else int(m.group('s').split('.', 1)[0]) )
+	ts = datetime.datetime.strptime(
+		'{:04d}-{:02d}-{:02d} {:02d}:{:02d}:{:02d}'.format(*ts_list),
+		'%Y-%m-%d %H:%M:%S' )
+	assert tz
+	ts = ts.replace(tzinfo=tz)
+	return ts
+
 def yaml_load(stream, dict_cls=OrderedDict, loader_cls=yaml.SafeLoader):
-	class CustomLoader(loader_cls): pass
-	def construct_mapping(loader, node):
-		loader.flatten_mapping(node)
-		return dict_cls(loader.construct_pairs(node))
-	CustomLoader.add_constructor(
-		yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, construct_mapping )
-	return yaml.load(stream, CustomLoader)
+	if not hasattr(yaml_load, '_cls'):
+		class CustomLoader(loader_cls): pass
+		def construct_mapping(loader, node):
+			loader.flatten_mapping(node)
+			return dict_cls(loader.construct_pairs(node))
+		CustomLoader.add_constructor(
+			yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, construct_mapping )
+		# Do not auto-resolve dates/timestamps, as PyYAML does that badly
+		res_map = CustomLoader.yaml_implicit_resolvers = CustomLoader.yaml_implicit_resolvers.copy()
+		res_int = list('-+0123456789')
+		for c in res_int: del res_map[c]
+		CustomLoader.add_implicit_resolver(
+			'tag:yaml.org,2002:int',
+			re.compile(r'''^(?:[-+]?0b[0-1_]+
+				|[-+]?0[0-7_]+
+				|[-+]?(?:0|[1-9][0-9_]*)
+				|[-+]?0x[0-9a-fA-F_]+)$''', re.X), res_int )
+		yaml_load._cls = CustomLoader
+	return yaml.load(stream, yaml_load._cls)
 
 
 class GTFS_Shizuoka_20161013(unittest.TestCase):
@@ -163,6 +214,11 @@ class GTFS_Shizuoka_20161013(unittest.TestCase):
 		return sum(int(n)*k for k, n in zip([3600, 60, 1], dts_vals))
 
 	@classmethod
+	def dts_format(cls, dts):
+		dts = int(dts)
+		return datetime.time(dts // 3600, (dts % 3600) // 60, dts % 60, dts % 1)
+
+	@classmethod
 	def load_test_data(cls, name):
 		'Load test data from specified YAML file and return as dmap object.'
 		with (path_test / '{}.test.{}.yaml'.format(path_file.stem, name)).open() as src:
@@ -171,8 +227,6 @@ class GTFS_Shizuoka_20161013(unittest.TestCase):
 	def assert_journey_components(self, test):
 		'''Check that lines, trips, footpaths
 			and transfers for all test journeys can be found individually.'''
-		goal_start_dts = sum(n*k for k, n in zip( [3600, 60, 1],
-			op.attrgetter('hour', 'minute', 'second')(test.goal.start_time) ))
 		goal_src, goal_dst = op.itemgetter(test.goal.src, test.goal.dst)(self.timetable.stops)
 		self.assertTrue(goal_src and goal_dst)
 
@@ -219,11 +273,22 @@ class GTFS_Shizuoka_20161013(unittest.TestCase):
 			self.assertLess(min(abs(jn_start - ts.dts_dep) for ts in ts_first), self.dts_slack)
 			self.assertLess(min(abs(jn_end - ts.dts_arr) for ts in ts_last), self.dts_slack)
 
-	def assert_journey_results(self, test, journeys):
+	def assert_journey_results(self, test, journeys, verbose=False):
 		t, jn_matched = tb_routing.types.public, set()
 		for jn_name, jn_info in (test.journey_set or dict()).items():
 			for journey in journeys:
-				for seg_jn, seg_test in it.zip_longest(journey, jn_info.segments.values()):
+				if verbose: print('\n--- journey:', journey)
+				dts_dep_test, dts_arr_test = map(
+					self.dts_parse, [jn_info.stats.start, jn_info.stats.end] )
+				dts_dep_jn, dts_arr_jn = journey.dts_dep, journey.dts_arr
+				if verbose:
+					print(' ', 'time: {} == {} and {} == {}'.format(*map(
+						self.dts_format, [dts_dep_test, dts_dep_jn, dts_arr_test, dts_arr_jn] )))
+				if max(
+					abs(dts_dep_test - dts_dep_jn),
+					abs(dts_arr_test - dts_arr_jn) ) > self.dts_slack: break
+				for seg_jn, seg_test in it.zip_longest(journey, jn_info.segments.items()):
+					seg_test_name, seg_test = seg_test
 					if not (seg_jn and seg_test): break
 					a_test, b_test = op.itemgetter(seg_test.src, seg_test.dst)(self.timetable.stops)
 					type_test = seg_test.type
@@ -232,10 +297,13 @@ class GTFS_Shizuoka_20161013(unittest.TestCase):
 					elif isinstance(seg_jn, t.JourneyFp):
 						type_jn, a_jn, b_jn = 'fp', seg_jn.stop_from, seg_jn.stop_to
 					else: raise ValueError(seg_jn)
+					if verbose:
+						print(' ', seg_test_name, type_test == type_jn, a_test is a_jn, b_test is b_jn)
 					if not (type_test == type_jn and a_test is a_jn and b_test is b_jn): break
 					jn_matched.add(id(journey))
 				else: break
 			else: raise AssertionError('No journeys to match test-data for: {}'.format(jn_name))
+			if verbose: print()
 		for journey in journeys:
 			if id(journey) not in jn_matched:
 				raise AssertionError('Unmatched journey found: {}'.format(journey))
@@ -246,7 +314,7 @@ class GTFS_Shizuoka_20161013(unittest.TestCase):
 		self.assert_journey_components(test)
 
 		dts_start = sum(n*k for k, n in zip( [3600, 60, 1],
-			op.attrgetter('hour', 'minute', 'second')(test.goal.start_time) ))
+			op.attrgetter('hour', 'minute', 'second')(parse_iso8601(test.goal.start_time)) ))
 		src, dst = op.itemgetter(test.goal.src, test.goal.dst)(self.timetable.stops)
 		journeys = self.router.query_earliest_arrival(src, dst, dts_start)
 		self.assert_journey_results(test, journeys)

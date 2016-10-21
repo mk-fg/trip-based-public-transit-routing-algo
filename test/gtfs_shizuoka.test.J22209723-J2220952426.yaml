@@ -8,14 +8,15 @@ journey_set:
 
   journey-A:
     stats:
-      start: 07:20
+      # start: 07:20 # much better option!!!
+      start: 06:10
       end: 08:43
     segments:
-      leg1:
+      trip-M:
         type: trip
         src: J22209723_0
         dst: J222093340_2
-      leg2:
+      trip-N:
         type: trip
         src: J222093340_2
         dst: J2220952426_0
@@ -41,4 +42,18 @@ journey_set:
   #     trip-Z:
   #       type: trip
   #       src: J22209787_1
+  #       dst: J2220952426_0
+
+  # journey-C:
+  #   stats:
+  #     start: 08:20
+  #     end: 10:53
+  #   segments:
+  #     trip-I:
+  #       type: trip
+  #       src: J22209723_0
+  #       dst: J222093340_2
+  #     trip-J:
+  #       type: trip
+  #       src: J222093340_2
   #       dst: J2220952426_0
