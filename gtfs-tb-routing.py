@@ -80,7 +80,8 @@ def parse_gtfs_timetable(gtfs_dir, conf):
 	footpaths.discard_longer(conf.footpath_dt_max)
 
 	log.debug(
-		'Parsed timetable: stops={}, footpaths={} (mean_dt={:.1f}s), trips={} (mean_stops={:.1f})',
+		'Parsed timetable: stops={:,}, footpaths={:,}'
+			' (mean_dt={:,.1f}s), trips={:,} (mean_stops={:,.1f})',
 		len(stops), len(footpaths), footpaths.stat_mean_dt(), len(trips), trips.stat_mean_stops() )
 	return types.Timetable(stops, footpaths, trips)
 

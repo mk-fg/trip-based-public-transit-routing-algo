@@ -62,8 +62,7 @@ class Footpaths:
 
 	def time_delta(self, stop_from, stop_to): return self.set_idx[stop_from][stop_to]
 
-	def __len__(self): return len(self.set_idx)
-	def __iter__(self): return iter(self.set_idx.items())
+	def __len__(self): return sum(map(len, self.set_idx.values()))
 
 
 trip_stop_daytime = lambda dts: dts % (24 * 3600)
