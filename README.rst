@@ -23,6 +23,7 @@ Requirements
 
 - Python 3.x
 - `attrs <https://attrs.readthedocs.io/en/stable/>`_
+- (for tests only) `PyYAML <http://pyyaml.org/>`_
 - (for Python<3.4 only) `pathlib <https://pypi.python.org/pypi/pathlib2/>`_
 - (for Python<3.4 only) `enum34 <https://pypi.python.org/pypi/enum34/>`_
 

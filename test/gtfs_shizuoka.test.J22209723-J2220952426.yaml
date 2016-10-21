@@ -1,0 +1,23 @@
+goal:
+  start_time: 2016-10-17T06:00:00
+  src: J22209723_0
+  dst: J2220952426_0
+
+
+journey_set:
+
+
+  journey-A:
+    stats:
+      start: 07:20
+      end: 08:43
+
+    segments:
+      leg1:
+        type: trip
+        src: J22209723_0
+        dst: J222093340_2
+      leg2:
+        type: trip
+        src: J222093340_2
+        dst: J2220952426_0
