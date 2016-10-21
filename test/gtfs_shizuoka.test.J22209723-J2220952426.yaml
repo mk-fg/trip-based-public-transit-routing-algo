@@ -6,12 +6,10 @@ goal:
 
 journey_set:
 
-
   journey-A:
     stats:
       start: 07:20
       end: 08:43
-
     segments:
       leg1:
         type: trip
@@ -21,3 +19,26 @@ journey_set:
         type: trip
         src: J222093340_2
         dst: J2220952426_0
+
+  # journey-B:
+  #   stats:
+  #     start: 06:10
+  #     end: 06:59
+  #   segments:
+  #     trip-X:
+  #       type: trip
+  #       src: J22209723_0
+  #       dst: J22209746_0
+  #     trip-Y:
+  #       type: trip
+  #       src: J22209746_0
+  #       dst: J22209786_0
+  #     walk:
+  #       type: fp
+  #       src: J22209786_0
+  #       dst: J22209787_1
+  #       distance: ~150m
+  #     trip-Z:
+  #       type: trip
+  #       src: J22209787_1
+  #       dst: J2220952426_0

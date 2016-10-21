@@ -180,7 +180,7 @@ class GTFS_Shizuoka_20161013(unittest.TestCase):
 			raise AssertionError('[{}:{}] {}'.format(jn_name, seg_name, tpl).format(*args, **kws))
 
 		g = self.router.graph
-		for jn_name, jn_info in test.journey_set.items():
+		for jn_name, jn_info in (test.journey_set or dict()).items():
 			jn_start, jn_end = map(self.dts_parse, [jn_info.stats.start, jn_info.stats.end])
 			ts_first, ts_last, ts_transfer = set(), set(), set()
 
@@ -220,18 +220,25 @@ class GTFS_Shizuoka_20161013(unittest.TestCase):
 			self.assertLess(min(abs(jn_end - ts.dts_arr) for ts in ts_last), self.dts_slack)
 
 	def assert_journey_results(self, test, journeys):
-		t = tb_routing.types.public
-		for jn_name, jn_info in test.journey_set.items():
+		t, jn_matched = tb_routing.types.public, set()
+		for jn_name, jn_info in (test.journey_set or dict()).items():
 			for journey in journeys:
 				for seg_jn, seg_test in it.zip_longest(journey, jn_info.segments.values()):
 					if not (seg_jn and seg_test): break
 					a_test, b_test = op.itemgetter(seg_test.src, seg_test.dst)(self.timetable.stops)
-					if isinstance(seg_jn, t.JourneyTrip): a_jn, b_jn = seg_jn.ts_from.stop, seg_jn.ts_to.stop
-					elif isinstance(seg_jn, t.JourneyFp): a_jn, b_jn = seg_jn.stop_from, seg_jn.stop_to
+					type_test = seg_test.type
+					if isinstance(seg_jn, t.JourneyTrip):
+						type_jn, a_jn, b_jn = 'trip', seg_jn.ts_from.stop, seg_jn.ts_to.stop
+					elif isinstance(seg_jn, t.JourneyFp):
+						type_jn, a_jn, b_jn = 'fp', seg_jn.stop_from, seg_jn.stop_to
 					else: raise ValueError(seg_jn)
-					if not (a_test is a_jn and b_test is b_jn): break
+					if not (type_test == type_jn and a_test is a_jn and b_test is b_jn): break
+					jn_matched.add(id(journey))
 				else: break
 			else: raise AssertionError('No journeys to match test-data for: {}'.format(jn_name))
+		for journey in journeys:
+			if id(journey) not in jn_matched:
+				raise AssertionError('Unmatched journey found: {}'.format(journey))
 
 
 	def test_journeys_J22209723_J2220952426(self):
