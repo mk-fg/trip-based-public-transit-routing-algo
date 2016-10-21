@@ -125,22 +125,27 @@ class Journey:
 	def _stats(self):
 		if not self._stats_cache:
 			dts_arr = trip_count = fp_count = 0
+			dts_dep, dts_dep_fp = None, 0
 			for seg in self.segments:
 				if isinstance(seg, JourneyTrip):
-					dts_arr = seg.ts_to.dts_arr
 					trip_count += 1
+					dts_arr = seg.ts_to.dts_arr
+					if dts_dep is None: dts_dep = seg.ts_from.dts_dep - dts_dep_fp
 				elif isinstance(seg, JourneyFp):
-					dts_arr = dts_arr + seg.dt
 					fp_count += 1
-			self._stats_cache = dts_arr, trip_count, fp_count
+					dts_arr = dts_arr + seg.dt
+					if dts_dep is None: dts_dep_fp += seg.dt
+			self._stats_cache = dts_arr, dts_dep, trip_count, fp_count
 		return self._stats_cache
 
 	@property
 	def dts_arr(self): return self._stats()[0]
 	@property
-	def trip_count(self): return self._stats()[1]
+	def dts_dep(self): return self._stats()[1]
 	@property
-	def fp_count(self): return self._stats()[2]
+	def trip_count(self): return self._stats()[2]
+	@property
+	def fp_count(self): return self._stats()[3]
 
 	def copy(self): return Journey(self.segments.copy())
 
