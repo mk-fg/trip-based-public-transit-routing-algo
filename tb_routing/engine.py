@@ -178,9 +178,24 @@ class TBRoutingEngine:
 				min-transfer journeys as well, just called that in the paper.'''
 		timetable, lines, transfers = self.graph
 
+		TripTransferCheck = namedtuple('TTCheck', 'dt_fp stopidx trip n journey')
+		TripSegment = namedtuple('TripSeg', 'trip stopidx_a stopidx_b journey')
+
 		journeys = t.public.JourneySet()
 		R, Q = dict(), dict()
-		TripSegment = namedtuple('TripSeg', 'trip stopidx_a stopidx_b journey')
+
+		## Note: this sub-queue is used fix original algo's quirk where
+		##   additional unnecessary footpaths are not factored into optimality.
+		##  In original paper, first transfer to other TripSegment to be enqueue()'d
+		##   "wins" for all of the stops on it (by updating index R),
+		##    regardless of later-enqueue()'d segments with more optimal journeys.
+		subqueue = list() # Sequence[TripTransferCheck]
+		def subqueue_flush():
+			'enqueue() all TripTransferCheck segments in a most-optimal-first order.'
+			subqueue.sort(key=op.attrgetter('dt_fp', 'stopidx', 'trip.id'))
+			for tt_chk in subqueue:
+				enqueue(tt_chk.trip, tt_chk.stopidx, tt_chk.n, tt_chk.journey)
+			subqueue.clear()
 
 		def enqueue(trip, i, n, journey, _ss=t.public.SolutionStatus):
 			if i >= R.get(trip, u.inf): return
@@ -205,11 +220,11 @@ class TBRoutingEngine:
 			journey = t.public.Journey()
 			journey.append_fp(stop_src, stop_q, dt_fp)
 			for i, line in lines.lines_with_stop(stop_q):
+				## Note: "t ← earliest trip" is usually not desirable as a first trip.
+				##  I.e. you'd usually prefer to pick latest trip possible to min dep-to-arr time.
 				trip = line.earliest_trip(i, dts_q)
-				## Note: footpath to first stop is not considered as +1 transfer here.
-				##   Only first-by-index fp-reachable stop on the Line will be queued.
-				##   Maybe some min(dt_fp) pre-enqueue filtering should be added here.
-				if trip: enqueue(trip, i, 0, journey)
+				if trip: subqueue.append(TripTransferCheck(dt_fp, i, trip, 0, journey))
+		subqueue_flush()
 
 		# Main loop
 		t_min, n = u.inf, 0
@@ -232,11 +247,11 @@ class TBRoutingEngine:
 						for k, (_, _, trip_u, j) in transfers.from_trip_stop(trip, i):
 							jn_u = journey.copy().append_trip(trip[b], trip[i])
 							stop_i, stop_j = trip[i].stop, trip_u[j].stop
-							if stop_i is not stop_j:
-								jn_u.append_fp( stop_i, stop_j,
-									timetable.footpaths.time_delta(stop_i, stop_j) )
-							enqueue(trip_u, j, n+1, jn_u)
+							dt_fp = timetable.footpaths.time_delta(stop_i, stop_j)
+							jn_u.append_fp(stop_i, stop_j, dt_fp)
+							subqueue.append(TripTransferCheck(dt_fp, j, trip_u, n+1, jn_u))
 
+			subqueue_flush()
 			n += 1
 
 		return journeys
