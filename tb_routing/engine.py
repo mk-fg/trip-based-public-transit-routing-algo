@@ -191,19 +191,17 @@ class TBRoutingEngine:
 				R[trip_u] = min(i, R.get(trip_u, u.inf))
 
 		lines_to_dst = dict() # (i, line, dt) indexed by trip
-		for stop_q, dt_fp in it.chain( [(stop_dst, 0)],
-				timetable.footpaths.from_stops_to(stop_dst) ):
+		for stop_q, dt_fp in timetable.footpaths.from_stops_to(stop_dst):
 			for i, line in lines.lines_with_stop(stop_q):
 				for trip in line: lines_to_dst.setdefault(trip, list()).append((i, line, dt_fp))
 		for line_infos in lines_to_dst.values(): # so that all "i > b" come up first
 			line_infos.sort(reverse=True, key=op.itemgetter(0))
 
 		# Queue initial set of trips (reachable from stop_src) to examine
-		for stop_q, dt_fp in it.chain( [(stop_src, 0)],
-				timetable.footpaths.to_stops_from(stop_src) ):
+		for stop_q, dt_fp in timetable.footpaths.to_stops_from(stop_src):
 			dts_q = dts_src + dt_fp
 			journey = t.public.Journey()
-			if dt_fp: journey.append_fp(stop_src, stop_q, dt_fp)
+			journey.append_fp(stop_src, stop_q, dt_fp)
 			for i, line in lines.lines_with_stop(stop_q):
 				trip = line.earliest_trip(i, dts_q)
 				## Note: footpath to first stop is not considered as +1 transfer here.

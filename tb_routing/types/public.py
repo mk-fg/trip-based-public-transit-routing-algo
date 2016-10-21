@@ -82,7 +82,7 @@ class TripStop:
 			'trip_id={0.trip.id}, stopidx={0.stopidx}, stop={0.stop},'
 			' dts_arr={0.dts_arr}, dts_dep={0.dts_dep})' ).format(self)
 
-@u.attr_struct(hash=False, cmp=False)
+@u.attr_struct(hash=False)
 class Trip:
 	stops = u.attr_init(list)
 	id = u.attr_init(lambda seq=iter(range(2**40)): next(seq))
@@ -118,7 +118,7 @@ class Timetable: keys = 'stops footpaths trips'
 JourneyTrip = namedtuple('JTrip', 'ts_from ts_to')
 JourneyFp = namedtuple('JFootpath', 'stop_from stop_to dt')
 
-@u.attr_struct(slots=False, hash=False)
+@u.attr_struct(slots=False, hash=False, repr=False)
 class Journey:
 	segments = u.attr_init(list)
 
@@ -150,9 +150,10 @@ class Journey:
 		self._stats_cache = None
 		return self
 
-	def append_fp(self, *jfp_args, **jfp_kws):
-		self.segments.append(JourneyFp(*jfp_args, **jfp_kws))
-		self._stats_cache = None
+	def append_fp(self, stop_from, stop_to, dt):
+		if stop_from is not stop_to:
+			self.segments.append(JourneyFp(stop_from, stop_to, dt))
+			self._stats_cache = None
 		return self
 
 	def compare(self, jn2, _ss=SolutionStatus):
@@ -168,18 +169,37 @@ class Journey:
 	def __iter__(self): return iter(self.segments)
 	def __hash__(self): return id(self)
 
+	@staticmethod
+	def dts_format(dts):
+		return datetime.time(dts // 3600, (dts % 3600) // 60, int(dts % 60), dts % 1)
+
+	def __repr__(self):
+		points = list()
+		for seg in self.segments:
+			if isinstance(seg, JourneyTrip):
+				if not points:
+					points.append(
+						'{0.stopidx}:{0.stop.id}:{0.stop.name} [{dts_dep}]'\
+						.format(seg.ts_from, dts_dep=self.dts_format(seg.ts_from.dts_dep)) )
+				points.append(
+					'{0.stopidx}:{0.stop.id}:{0.stop.name} [{dts_arr}]'\
+					.format(seg.ts_to, dts_arr=self.dts_format(seg.ts_to.dts_arr)) )
+			elif isinstance(seg, JourneyFp):
+				points.append('(fp-to={0.id}:{0.name} dt={1})'.format(
+					seg.stop_to, datetime.timedelta(seconds=int(seg.dt)) ))
+		return '<Journey[ {} ]>'.format(' - '.join(points))
+
 	def pretty_print(self, indent=0, **print_kws):
 		p = lambda tpl,*a,**k: print(' '*indent + tpl.format(*a,**k), **print_kws)
-		dts_format = lambda dts: datetime.time(dts // 3600, (dts % 3600) // 60, int(dts % 60), dts % 1)
 		p( 'Journey {:x} (arrival: {}, trips: {}):',
-			id(self), dts_format(self.dts_arr), self.trip_count )
+			id(self), self.dts_format(self.dts_arr), self.trip_count )
 		for seg in self.segments:
 			if isinstance(seg, JourneyTrip):
 				p('  trip [{}]:', seg.ts_from.trip.id)
-				p( '    from (dep at {dts_dep}): {0.stopidx}:{0.stop.name} [{0.stop.id}]', seg.ts_from,
-					dts_arr=dts_format(seg.ts_from.dts_arr), dts_dep=dts_format(seg.ts_from.dts_dep) )
-				p( '    to (arr at {dts_arr}): {0.stopidx}:{0.stop.name} [{0.stop.id}]', seg.ts_to,
-					dts_arr=dts_format(seg.ts_to.dts_arr), dts_dep=dts_format(seg.ts_to.dts_dep) )
+				p( '    from (dep at {dts_dep}): {0.stopidx}:{0.stop.name} [{0.stop.id}]',
+					seg.ts_from, dts_dep=self.dts_format(seg.ts_from.dts_dep) )
+				p( '    to (arr at {dts_arr}): {0.stopidx}:{0.stop.name} [{0.stop.id}]',
+					seg.ts_to, dts_arr=self.dts_format(seg.ts_to.dts_arr) )
 			elif isinstance(seg, JourneyFp):
 				p('  footpath (time: {}):', datetime.timedelta(seconds=int(seg.dt)))
 				p('    from: {0.name} [{0.id}]', seg.stop_from)
