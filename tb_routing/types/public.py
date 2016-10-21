@@ -170,7 +170,8 @@ class Journey:
 
 	@staticmethod
 	def dts_format(dts):
-		return datetime.time(dts // 3600, (dts % 3600) // 60, int(dts % 60), dts % 1)
+		dts = int(dts)
+		return datetime.time(dts // 3600, (dts % 3600) // 60, dts % 60, dts % 1)
 
 	def __repr__(self):
 		points = list()
