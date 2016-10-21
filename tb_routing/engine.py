@@ -192,6 +192,7 @@ class TBRoutingEngine:
 
 		lines_to_dst = dict() # (i, line, dt) indexed by trip
 		for stop_q, dt_fp in timetable.footpaths.from_stops_to(stop_dst):
+			if stop_q is stop_dst: dt_fp = 0
 			for i, line in lines.lines_with_stop(stop_q):
 				for trip in line: lines_to_dst.setdefault(trip, list()).append((i, line, dt_fp))
 		for line_infos in lines_to_dst.values(): # so that all "i > b" come up first
@@ -199,6 +200,7 @@ class TBRoutingEngine:
 
 		# Queue initial set of trips (reachable from stop_src) to examine
 		for stop_q, dt_fp in timetable.footpaths.to_stops_from(stop_src):
+			if stop_q is stop_src: dt_fp = 0
 			dts_q = dts_src + dt_fp
 			journey = t.public.Journey()
 			journey.append_fp(stop_src, stop_q, dt_fp)
