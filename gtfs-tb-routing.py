@@ -12,9 +12,9 @@ import tb_routing as tb
 class Conf:
 	dt_ch = 2*60 # fixed time-delta overhead for changing trips (i.e. p->p footpaths)
 	stop_linger_time_default = 5*60 # used if departure-time is missing
-	footpath_dt_base = 3*60 # footpath_dt = dt_base + km / speed_kmh
+	footpath_dt_base = 2*60 # footpath_dt = dt_base + km / speed_kmh
 	footpath_speed_kmh = 5 / 3600
-	footpath_dt_max = 8*60 # all footpaths longer than that are discarded as invalid
+	footpath_dt_max = 7*60 # all footpaths longer than that are discarded as invalid
 
 log = tb.u.get_logger('gtfs-cli')
 
@@ -86,6 +86,12 @@ def parse_gtfs_timetable(gtfs_dir, conf):
 	return types.Timetable(stops, footpaths, trips)
 
 
+def dts_parse(dts_str):
+	if ':' not in dts_str: return float(dts_str)
+	dts_vals = dts_str.split(':')
+	if len(dts_vals) == 2: dts_vals.append('00')
+	return sum(int(n)*k for k, n in zip([3600, 60, 1], dts_vals))
+
 def calc_timer(func, *args, log=tb.u.get_logger('timer'), **kws):
 	func_id = '.'.join([func.__module__.strip('__'), func.__name__])
 	log.debug('[{}] Starting...', func_id)
@@ -118,6 +124,9 @@ def main(args=None):
 
 	parser.add_argument('stop_from', help='Stop ID to query journey from. Example: J22209723_0')
 	parser.add_argument('stop_to', help='Stop ID to query journey to. Example: J2220952426_0')
+	parser.add_argument('day_time', nargs='?', default='00:00',
+		help='Day time to start journey at, either as HH:MM,'
+			' HH:MM:SS or just seconds int/float. Default: %(default)s')
 
 	parser.add_argument('-c', '--cache', metavar='path',
 		help='Pickle cache-file to load (if exists)'
@@ -131,11 +140,11 @@ def main(args=None):
 		datefmt='%Y-%m-%d %H:%M:%S',
 		level=tb.u.logging.DEBUG if opts.debug else tb.u.logging.WARNING )
 
+	dts_start = dts_parse(opts.day_time)
 	timetable, router = init_gtfs_router(opts.gtfs_dir, opts.cache, timer_func=calc_timer)
 
 	a, b = timetable.stops[opts.stop_from], timetable.stops[opts.stop_to]
-	journeys = router.query_earliest_arrival(a, b, 0)
-
+	journeys = router.query_earliest_arrival(a, b, dts_start)
 	journeys.pretty_print()
 
 if __name__ == '__main__': sys.exit(main())
