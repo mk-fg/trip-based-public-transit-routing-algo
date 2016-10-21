@@ -8,6 +8,15 @@ import runpy, tempfile, warnings, shutil, zipfile
 import yaml # PyYAML module is required for tests
 
 
+path_file = Path(__file__)
+path_test = Path(__file__).parent
+path_project = path_test.parent
+
+sys.path.insert(1, str(path_project))
+import tb_routing
+gtfs_cli = type( 'FakeModule', (object,),
+	runpy.run_path(str(path_project / 'gtfs-tb-routing.py')) )
+
 
 class dmap(ChainMap):
 
@@ -69,18 +78,6 @@ def yaml_load(stream, dict_cls=OrderedDict, loader_cls=yaml.SafeLoader):
 	CustomLoader.add_constructor(
 		yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, construct_mapping )
 	return yaml.load(stream, CustomLoader)
-
-
-
-path_file = Path(__file__)
-path_test = Path(__file__).parent
-path_project = path_test.parent
-
-sys.path.insert(1, str(path_project))
-import tb_routing
-gtfs_cli = type( 'FakeModule', (object,),
-	runpy.run_path(str(path_project / 'gtfs-tb-routing.py')) )
-
 
 
 class GTFS_Shizuoka_20161013(unittest.TestCase):
@@ -171,12 +168,11 @@ class GTFS_Shizuoka_20161013(unittest.TestCase):
 		with (path_test / '{}.test.{}.yaml'.format(path_file.stem, name)).open() as src:
 			return dmap(yaml_load(src))
 
-	def check_journey_components(self, test):
+	def assert_journey_components(self, test):
 		'''Check that lines, trips, footpaths
 			and transfers for all test journeys can be found individually.'''
-		goal_start_ts = test.goal.start_time
 		goal_start_dts = sum(n*k for k, n in zip( [3600, 60, 1],
-			op.attrgetter('hour', 'minute', 'second')(goal_start_ts) ))
+			op.attrgetter('hour', 'minute', 'second')(test.goal.start_time) ))
 		goal_src, goal_dst = op.itemgetter(test.goal.src, test.goal.dst)(self.timetable.stops)
 		self.assertTrue(goal_src and goal_dst)
 
@@ -223,7 +219,27 @@ class GTFS_Shizuoka_20161013(unittest.TestCase):
 			self.assertLess(min(abs(jn_start - ts.dts_dep) for ts in ts_first), self.dts_slack)
 			self.assertLess(min(abs(jn_end - ts.dts_arr) for ts in ts_last), self.dts_slack)
 
+	def assert_journey_results(self, test, journeys):
+		t = tb_routing.types.public
+		for jn_name, jn_info in test.journey_set.items():
+			for journey in journeys:
+				for seg_jn, seg_test in it.zip_longest(journey, jn_info.segments.values()):
+					if not (seg_jn and seg_test): break
+					a_test, b_test = op.itemgetter(seg_test.src, seg_test.dst)(self.timetable.stops)
+					if isinstance(seg_jn, t.JourneyTrip): a_jn, b_jn = seg_jn.ts_from.stop, seg_jn.ts_to.stop
+					elif isinstance(seg_jn, t.JourneyFp): a_jn, b_jn = seg_jn.stop_from, seg_jn.stop_to
+					else: raise ValueError(seg_jn)
+					if not (a_test is a_jn and b_test is b_jn): break
+				else: break
+			else: raise AssertionError('No journeys to match test-data for: {}'.format(jn_name))
+
 
 	def test_journeys_J22209723_J2220952426(self):
 		test = self.load_test_data('J22209723-J2220952426')
-		self.check_journey_components(test)
+		self.assert_journey_components(test)
+
+		dts_start = sum(n*k for k, n in zip( [3600, 60, 1],
+			op.attrgetter('hour', 'minute', 'second')(test.goal.start_time) ))
+		src, dst = op.itemgetter(test.goal.src, test.goal.dst)(self.timetable.stops)
+		journeys = self.router.query_earliest_arrival(src, dst, dts_start)
+		self.assert_journey_results(test, journeys)
