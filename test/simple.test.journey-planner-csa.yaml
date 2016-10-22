@@ -61,4 +61,4 @@ testMultipleRoutes:
     journey-A:
       stats: ['10:00', '11:40']
       segments:
-        trip-A: [trip, A, D]
+        trip-A: [trip, A, E]

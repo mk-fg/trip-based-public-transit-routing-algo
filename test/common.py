@@ -254,7 +254,7 @@ class GTFSTestFixture:
 
 class GraphAssertions:
 
-	dts_slack = 10 * 60
+	dts_slack = 3 * 60
 
 	def __init__(self, graph=None): self.graph = graph
 
@@ -268,7 +268,9 @@ class GraphAssertions:
 		assert goal_src and goal_dst
 
 		def raise_error(tpl, *args, **kws):
-			raise AssertionError('[{}:{}] {}'.format(jn_name, seg_name, tpl).format(*args, **kws))
+			jn_seg = kws.get('err_seg', seg_name)
+			jn_seg = ':{}'.format(jn_seg) if jn_seg else ''
+			raise AssertionError('[{}{}] {}'.format(jn_name, jn_seg, tpl).format(*args, **kws))
 
 		for jn_name, jn_info in (test.journey_set or dict()).items():
 			jn_stats = struct_from_val(jn_info.stats, JourneyStats)
@@ -294,8 +296,8 @@ class GraphAssertions:
 								ts_transfer_found = True
 								ts_transfer_chk.clear()
 								break
-							if a is goal_src: ts_first.update(trip)
-							if b is goal_dst: ts_last.update(trip)
+							if a is goal_src: ts_first.add(trip[m])
+							if b is goal_dst: ts_last.add(trip[m])
 							ts_transfer.add(trip[m])
 						line_found = True
 					if not line_found: raise_error('No Lines/Trips found for trip-segment')
@@ -309,8 +311,17 @@ class GraphAssertions:
 				if not ts_transfer and b is not goal_dst:
 					raise_error('No transfers found from segment (type={}) end ({!r})', seg.type, seg.dst)
 
-			assert min(abs(jn_start - ts.dts_dep) for ts in ts_first) < self.dts_slack
-			assert min(abs(jn_end - ts.dts_arr) for ts in ts_last) < self.dts_slack
+			for k, ts_set, chk in [('dts_dep', ts_first, jn_start), ('dts_arr', ts_last, jn_end)]:
+				dt_min = min(abs(chk - getattr(ts, k)) for ts in ts_set)
+				if dt_min > self.dts_slack:
+					if verbose:
+						print('[{}] All TripStops for {} goal-point:'.format(jn_name, k))
+						for ts in ts_set:
+							print( '  TripStop(trip_id={}, stopidx={}, stop_id={}, {}={})'\
+								.format(ts.trip.id, ts.stopidx, ts.stop.id, k, dts_format(getattr(ts, k))) )
+						print('[{}] Checking {} against: {}'.format(jn_name, k, dts_format(jn_end)))
+					raise_error( 'No trip-stops close to {} goal-point'
+						' in time (within {:,}s), min diff: {:,}s', k, self.dts_slack, dt_min )
 
 
 	def assert_journey_results(self, test, journeys, graph=None, verbose=verbose):
