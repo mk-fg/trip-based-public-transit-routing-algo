@@ -189,6 +189,7 @@ class TBRoutingEngine:
 		##  In original paper, first transfer to other TripSegment to be enqueue()'d
 		##   "wins" for all of the stops on it (by updating index R),
 		##    regardless of later-enqueue()'d segments with more optimal journeys.
+		# XXX: should be replaced by post-filter that'd pick later lines and min-footpaths
 		subqueue = list() # Sequence[TripTransferCheck]
 		def subqueue_flush():
 			'enqueue() all TripTransferCheck segments in a most-optimal-first order.'
