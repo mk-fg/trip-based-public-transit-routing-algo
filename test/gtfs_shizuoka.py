@@ -131,6 +131,18 @@ def yaml_load(stream, dict_cls=OrderedDict, loader_cls=yaml.SafeLoader):
 	return yaml.load(stream, yaml_load._cls)
 
 
+def struct_from_val(val, cls):
+	if isinstance(val, (tuple, list)): return cls(*val)
+	if isinstance(val, (dmap, dict, OrderedDict)): return cls(**val)
+	raise ValueError(val)
+
+@tb_routing.utils.attr_struct
+class JourneyStats: keys = 'start end'
+
+@tb_routing.utils.attr_struct
+class JourneySeg: keys = 'type src dst'
+
+
 class GTFS_Shizuoka_20161013(unittest.TestCase):
 
 	path_gtfs_zip = path_test / (path_file.stem + '.data.2016-10-13.zip')
@@ -235,10 +247,12 @@ class GTFS_Shizuoka_20161013(unittest.TestCase):
 
 		g = self.router.graph
 		for jn_name, jn_info in (test.journey_set or dict()).items():
-			jn_start, jn_end = map(self.dts_parse, [jn_info.stats.start, jn_info.stats.end])
+			jn_stats = struct_from_val(jn_info.stats, JourneyStats)
+			jn_start, jn_end = map(self.dts_parse, [jn_stats.start, jn_stats.end])
 			ts_first, ts_last, ts_transfer = set(), set(), set()
 
 			for seg_name, seg in jn_info.segments.items():
+				seg = struct_from_val(seg, JourneySeg)
 				a, b = op.itemgetter(seg.src, seg.dst)(self.timetable.stops)
 				ts_transfer_chk, ts_transfer_found, line_found = list(ts_transfer), False, False
 				ts_transfer.clear()
@@ -266,7 +280,8 @@ class GTFS_Shizuoka_20161013(unittest.TestCase):
 				else: raise NotImplementedError
 
 				if not ts_transfer_found and a is not goal_src:
-					raise_error('No transfers found from previous segment')
+					raise_error( 'No transfers found from'
+						' previous segment (checked: {})', len(ts_transfer_chk) )
 				if not ts_transfer and b is not goal_dst:
 					raise_error('No transfers found from segment (type={}) end ({!r})', seg.type, seg.dst)
 
@@ -278,8 +293,8 @@ class GTFS_Shizuoka_20161013(unittest.TestCase):
 		for jn_name, jn_info in (test.journey_set or dict()).items():
 			for journey in journeys:
 				if verbose: print('\n--- journey:', journey)
-				dts_dep_test, dts_arr_test = map(
-					self.dts_parse, [jn_info.stats.start, jn_info.stats.end] )
+				jn_stats = struct_from_val(jn_info.stats, JourneyStats)
+				dts_dep_test, dts_arr_test = map(self.dts_parse, [jn_stats.start, jn_stats.end])
 				dts_dep_jn, dts_arr_jn = journey.dts_dep, journey.dts_arr
 				if verbose:
 					print(' ', 'time: {} == {} and {} == {}'.format(*map(
@@ -290,6 +305,7 @@ class GTFS_Shizuoka_20161013(unittest.TestCase):
 				for seg_jn, seg_test in it.zip_longest(journey, jn_info.segments.items()):
 					seg_test_name, seg_test = seg_test
 					if not (seg_jn and seg_test): break
+					seg_test = struct_from_val(seg_test, JourneySeg)
 					a_test, b_test = op.itemgetter(seg_test.src, seg_test.dst)(self.timetable.stops)
 					type_test = seg_test.type
 					if isinstance(seg_jn, t.JourneyTrip):
