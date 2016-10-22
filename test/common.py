@@ -13,7 +13,8 @@ import tb_routing as tb
 gtfs_cli = type( 'FakeModule', (object,),
 	runpy.run_path(str(path_project / 'gtfs-tb-routing.py')) )
 
-if os.environ.get('TB_DEBUG'):
+verbose = os.environ.get('TB_DEBUG')
+if verbose:
 	tb.u.logging.basicConfig(
 		format='%(asctime)s :: %(name)s %(levelname)s :: %(message)s',
 		datefmt='%Y-%m-%d %H:%M:%S', level=tb.u.logging.DEBUG )
@@ -258,7 +259,7 @@ class GraphAssertions:
 	def __init__(self, graph=None): self.graph = graph
 
 
-	def assert_journey_components(self, test, graph=None):
+	def assert_journey_components(self, test, graph=None, verbose=verbose):
 		'''Check that lines, trips, footpaths
 			and transfers for all test journeys can be found individually.'''
 		graph = graph or self.graph
@@ -312,7 +313,7 @@ class GraphAssertions:
 			assert min(abs(jn_end - ts.dts_arr) for ts in ts_last) < self.dts_slack
 
 
-	def assert_journey_results(self, test, journeys, graph=None, verbose=False):
+	def assert_journey_results(self, test, journeys, graph=None, verbose=verbose):
 		'Assert that all journeys described by test-data (from YAML) match journeys (JourneySet).'
 		graph = graph or self.graph
 		jn_matched = set()

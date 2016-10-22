@@ -58,5 +58,5 @@ class SimpleGraphTests(unittest.TestSuite):
 
 
 def load_tests(loader, tests, pattern):
-	# XXX: because unittest in pypy3/3.3 #  doesn't have subTest ctx yet
+	# XXX: because unittest in pypy3/3.3 doesn't have subTest ctx yet
 	return SimpleGraphTests()

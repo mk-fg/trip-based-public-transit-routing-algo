@@ -1,3 +1,7 @@
+## All these are copied pretty much verbatim from
+##  ConnectionScannerTest.php in open-track/journey-planner project
+
+
 testBasicJourney:
   timetable:
     CS1234:
@@ -11,5 +15,50 @@ testBasicJourney:
   journey_set:
     journey-A:
       stats: ['10:00', '11:15']
+      segments:
+        trip-A: [trip, A, D]
+
+
+testJourneyWithEarlyTermination:
+  timetable:
+    CS1234:
+      - [A, x, '10:00']
+      - [B, '10:15', '10:20']
+      - [C, '10:45', '11:00']
+      - [D, '11:15', '11:20']
+      - [E, '11:35', x]
+
+  goal: [A, D, '9:00']
+
+  journey_set:
+    journey-A:
+      stats: ['10:00', '11:15']
+      segments:
+        trip-A: [trip, A, D]
+
+
+testMultipleRoutes:
+  timetable:
+    CS1234:
+      - [A, x, '10:00']
+      - [B, '10:15', '10:20']
+      - [C, '10:45', '11:00']
+      - [D, '11:15', '11:20']
+      - [E, '11:50', x]
+    CS1235:
+      - [A, x, '10:10']
+      - [C, '10:25', '11:00']
+      - [E, '12:00', x]
+    CS1236:
+      - [M, x, '10:30']
+      - [C, '11:00', '11:05']
+      - [D, '11:25', '11:30']
+      - [E, '11:40', x]
+
+  goal: [A, D, '9:00']
+
+  journey_set:
+    journey-A:
+      stats: ['10:00', '11:40']
       segments:
         trip-A: [trip, A, D]

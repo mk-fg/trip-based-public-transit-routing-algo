@@ -17,6 +17,32 @@ first, i.e. to have something working.
 
 Under heavy development, not really usable yet.
 
+|
+
+.. contents::
+  :backlinks: none
+
+
+
+Notes
+-----
+
+Some less obvious things are described in this section.
+
+Tests
+`````
+
+Commands to run tests from checkout directory::
+
+  % python3 -m unittest test.all
+  % python3 -m unittest test.simple
+
+``test.all.case`` also provides global index of all test cases by name::
+
+  % python3 -m unittest test.all.case.test_journeys_J22209723_J2220952426
+  % python3 -m unittest test.all.case.testMultipleRoutes
+
+
 
 Requirements
 ------------
