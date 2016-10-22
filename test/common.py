@@ -277,6 +277,7 @@ class GraphAssertions:
 			jn_start, jn_end = map(dts_parse, [jn_stats.start, jn_stats.end])
 			ts_first, ts_last, ts_transfer = set(), set(), set()
 
+			# Check segments
 			for seg_name, seg in jn_info.segments.items():
 				seg = struct_from_val(seg, JourneySeg)
 				a, b = op.itemgetter(seg.src, seg.dst)(graph.timetable.stops)
@@ -296,7 +297,7 @@ class GraphAssertions:
 								ts_transfer_found = True
 								ts_transfer_chk.clear()
 								break
-							if a is goal_src: ts_first.add(trip[m])
+							if a is goal_src: ts_first.add(trip[n])
 							if b is goal_dst: ts_last.add(trip[m])
 							ts_transfer.add(trip[m])
 						line_found = True
@@ -311,6 +312,8 @@ class GraphAssertions:
 				if not ts_transfer and b is not goal_dst:
 					raise_error('No transfers found from segment (type={}) end ({!r})', seg.type, seg.dst)
 
+			# Check start/end times
+			seg_name = None
 			for k, ts_set, chk in [('dts_dep', ts_first, jn_start), ('dts_arr', ts_last, jn_end)]:
 				dt_min = min(abs(chk - getattr(ts, k)) for ts in ts_set)
 				if dt_min > self.dts_slack:
@@ -319,7 +322,7 @@ class GraphAssertions:
 						for ts in ts_set:
 							print( '  TripStop(trip_id={}, stopidx={}, stop_id={}, {}={})'\
 								.format(ts.trip.id, ts.stopidx, ts.stop.id, k, dts_format(getattr(ts, k))) )
-						print('[{}] Checking {} against: {}'.format(jn_name, k, dts_format(jn_end)))
+						print('[{}] Checking {} against: {}'.format(jn_name, k, dts_format(chk)))
 					raise_error( 'No trip-stops close to {} goal-point'
 						' in time (within {:,}s), min diff: {:,}s', k, self.dts_slack, dt_min )
 
@@ -327,19 +330,29 @@ class GraphAssertions:
 	def assert_journey_results(self, test, journeys, graph=None, verbose=verbose):
 		'Assert that all journeys described by test-data (from YAML) match journeys (JourneySet).'
 		graph = graph or self.graph
+		if verbose:
+			print('\n' + ' -'*5, 'Journeys found:')
+			journeys.pretty_print()
+
 		jn_matched = set()
 		for jn_name, jn_info in (test.journey_set or dict()).items():
+			jn_info_match = False
 			for journey in journeys:
-				if verbose: print('\n--- journey:', journey)
+				if id(journey) in jn_matched: continue
+				if verbose: print('\n[{}] check vs journey:'.format(jn_name), journey)
 				jn_stats = struct_from_val(jn_info.stats, JourneyStats)
 				dts_dep_test, dts_arr_test = map(dts_parse, [jn_stats.start, jn_stats.end])
 				dts_dep_jn, dts_arr_jn = journey.dts_dep, journey.dts_arr
-				if verbose:
-					print(' ', 'time: {} == {} and {} == {}'.format(*map(
-						dts_format, [dts_dep_test, dts_dep_jn, dts_arr_test, dts_arr_jn] )))
-				if max(
+
+				time_check = max(
 					abs(dts_dep_test - dts_dep_jn),
-					abs(dts_arr_test - dts_arr_jn) ) > self.dts_slack: break
+					abs(dts_arr_test - dts_arr_jn) ) <= self.dts_slack
+				if verbose:
+					print(' ', 'time check - {}: {} == {} and {} == {}'.format(
+						['fail', 'pass'][time_check],
+						*map(dts_format, [dts_dep_test, dts_dep_jn, dts_arr_test, dts_arr_jn]) ))
+				if not time_check: continue
+
 				for seg_jn, seg_test in it.zip_longest(journey, jn_info.segments.items()):
 					seg_test_name, seg_test = seg_test
 					if not (seg_jn and seg_test): break
@@ -354,10 +367,15 @@ class GraphAssertions:
 					if verbose:
 						print(' ', seg_test_name, type_test == type_jn, a_test is a_jn, b_test is b_jn)
 					if not (type_test == type_jn and a_test is a_jn and b_test is b_jn): break
+				else:
+					jn_info_match = True
 					jn_matched.add(id(journey))
-				else: break
-			else: raise AssertionError('No journeys to match test-data for: {}'.format(jn_name))
-			if verbose: print()
+					break
+
+			if not jn_info_match:
+				raise AssertionError('No journeys to match test-data for: {}'.format(jn_name))
+			if verbose: print('[{}] match found'.format(jn_name))
+
 		for journey in journeys:
 			if id(journey) not in jn_matched:
 				raise AssertionError('Unmatched journey found: {}'.format(journey))
