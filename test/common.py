@@ -13,6 +13,11 @@ import tb_routing as tb
 gtfs_cli = type( 'FakeModule', (object,),
 	runpy.run_path(str(path_project / 'gtfs-tb-routing.py')) )
 
+if os.environ.get('TB_DEBUG'):
+	tb.u.logging.basicConfig(
+		format='%(asctime)s :: %(name)s %(levelname)s :: %(message)s',
+		datefmt='%Y-%m-%d %H:%M:%S', level=tb.u.logging.DEBUG )
+
 
 
 class dmap(ChainMap):
@@ -134,16 +139,32 @@ def load_test_data(path_dir, path_stem, name):
 		return dmap(yaml_load(src))
 
 
-def struct_from_val(val, cls):
-	if isinstance(val, (tuple, list)): return cls(*val)
-	if isinstance(val, (dmap, dict, OrderedDict)): return cls(**val)
-	raise ValueError(val)
+def struct_from_val(val, cls, as_tuple=False):
+	if isinstance(val, (tuple, list)): val = cls(*val)
+	elif isinstance(val, (dmap, dict, OrderedDict)): val = cls(**val)
+	else: raise ValueError(val)
+	return val if not as_tuple else tb.u.attr.astuple(val)
 
 @tb.utils.attr_struct
 class JourneyStats: keys = 'start end'
 
 @tb.utils.attr_struct
 class JourneySeg: keys = 'type src dst'
+
+@tb.utils.attr_struct
+class TestGoal: keys = 'src dst dts_start'
+
+
+def dts_parse(dts_str):
+	if ':' not in dts_str: return float(dts_str)
+	dts_vals = dts_str.split(':')
+	if len(dts_vals) == 2: dts_vals.append('00')
+	assert len(dts_vals) == 3, dts_vals
+	return sum(int(n)*k for k, n in zip([3600, 60, 1], dts_vals))
+
+def dts_format(dts):
+	dts = int(dts)
+	return datetime.time(dts // 3600, (dts % 3600) // 60, dts % 60, dts % 1)
 
 
 
@@ -234,26 +255,15 @@ class GraphAssertions:
 
 	dts_slack = 10 * 60
 
-	def __init__(self, graph): self.g = graph
-
-	@staticmethod
-	def dts_parse(dts_str):
-		if ':' not in dts_str: return float(dts_str)
-		dts_vals = dts_str.split(':')
-		if len(dts_vals) == 2: dts_vals.append('00')
-		assert len(dts_vals) == 3, dts_vals
-		return sum(int(n)*k for k, n in zip([3600, 60, 1], dts_vals))
-
-	@staticmethod
-	def dts_format(dts):
-		dts = int(dts)
-		return datetime.time(dts // 3600, (dts % 3600) // 60, dts % 60, dts % 1)
+	def __init__(self, graph=None): self.graph = graph
 
 
-	def assert_journey_components(self, test):
+	def assert_journey_components(self, test, graph=None):
 		'''Check that lines, trips, footpaths
 			and transfers for all test journeys can be found individually.'''
-		goal_src, goal_dst = op.itemgetter(test.goal.src, test.goal.dst)(self.g.timetable.stops)
+		graph = graph or self.graph
+		goal = struct_from_val(test.goal, TestGoal)
+		goal_src, goal_dst = op.itemgetter(goal.src, goal.dst)(graph.timetable.stops)
 		assert goal_src and goal_dst
 
 		def raise_error(tpl, *args, **kws):
@@ -261,23 +271,23 @@ class GraphAssertions:
 
 		for jn_name, jn_info in (test.journey_set or dict()).items():
 			jn_stats = struct_from_val(jn_info.stats, JourneyStats)
-			jn_start, jn_end = map(self.dts_parse, [jn_stats.start, jn_stats.end])
+			jn_start, jn_end = map(dts_parse, [jn_stats.start, jn_stats.end])
 			ts_first, ts_last, ts_transfer = set(), set(), set()
 
 			for seg_name, seg in jn_info.segments.items():
 				seg = struct_from_val(seg, JourneySeg)
-				a, b = op.itemgetter(seg.src, seg.dst)(self.g.timetable.stops)
+				a, b = op.itemgetter(seg.src, seg.dst)(graph.timetable.stops)
 				ts_transfer_chk, ts_transfer_found, line_found = list(ts_transfer), False, False
 				ts_transfer.clear()
 
 				if seg.type == 'trip':
-					for n, line in self.g.lines.lines_with_stop(a):
+					for n, line in graph.lines.lines_with_stop(a):
 						for m, stop in enumerate(line.stops[n:], n):
 							if stop is b: break
 						else: continue
 						for trip in line:
 							for ts in ts_transfer_chk:
-								for k, (t1, n1, t2, n2) in self.g.transfers.from_trip_stop(ts.trip, ts.stopidx):
+								for k, (t1, n1, t2, n2) in graph.transfers.from_trip_stop(ts.trip, ts.stopidx):
 									if t2[n2].stop is trip[n].stop: break
 								else: continue
 								ts_transfer_found = True
@@ -302,17 +312,19 @@ class GraphAssertions:
 			assert min(abs(jn_end - ts.dts_arr) for ts in ts_last) < self.dts_slack
 
 
-	def assert_journey_results(self, test, journeys, verbose=False):
+	def assert_journey_results(self, test, journeys, graph=None, verbose=False):
+		'Assert that all journeys described by test-data (from YAML) match journeys (JourneySet).'
+		graph = graph or self.graph
 		jn_matched = set()
 		for jn_name, jn_info in (test.journey_set or dict()).items():
 			for journey in journeys:
 				if verbose: print('\n--- journey:', journey)
 				jn_stats = struct_from_val(jn_info.stats, JourneyStats)
-				dts_dep_test, dts_arr_test = map(self.dts_parse, [jn_stats.start, jn_stats.end])
+				dts_dep_test, dts_arr_test = map(dts_parse, [jn_stats.start, jn_stats.end])
 				dts_dep_jn, dts_arr_jn = journey.dts_dep, journey.dts_arr
 				if verbose:
 					print(' ', 'time: {} == {} and {} == {}'.format(*map(
-						self.dts_format, [dts_dep_test, dts_dep_jn, dts_arr_test, dts_arr_jn] )))
+						dts_format, [dts_dep_test, dts_dep_jn, dts_arr_test, dts_arr_jn] )))
 				if max(
 					abs(dts_dep_test - dts_dep_jn),
 					abs(dts_arr_test - dts_arr_jn) ) > self.dts_slack: break
@@ -320,7 +332,7 @@ class GraphAssertions:
 					seg_test_name, seg_test = seg_test
 					if not (seg_jn and seg_test): break
 					seg_test = struct_from_val(seg_test, JourneySeg)
-					a_test, b_test = op.itemgetter(seg_test.src, seg_test.dst)(self.g.timetable.stops)
+					a_test, b_test = op.itemgetter(seg_test.src, seg_test.dst)(graph.timetable.stops)
 					type_test = seg_test.type
 					if isinstance(seg_jn, tb.t.public.JourneyTrip):
 						type_jn, a_jn, b_jn = 'trip', seg_jn.ts_from.stop, seg_jn.ts_to.stop

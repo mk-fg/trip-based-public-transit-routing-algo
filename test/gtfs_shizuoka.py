@@ -25,8 +25,14 @@ class GTFS_Shizuoka_20161013(unittest.TestCase):
 		test = self.fx.load_test_data('J22209723-J2220952426')
 		self.checks.assert_journey_components(test)
 
-		dts_start = sum(n*k for k, n in zip( [3600, 60, 1],
-			op.attrgetter('hour', 'minute', 'second')(common.parse_iso8601(test.goal.start_time)) ))
-		src, dst = op.itemgetter(test.goal.src, test.goal.dst)(self.timetable.stops)
-		journeys = self.router.query_earliest_arrival(src, dst, dts_start)
+		goal = common.struct_from_val(test.goal, common.TestGoal)
+		goal.dts_start = common.dts_parse(goal.dts_start)
+		goal.src, goal.dst = op.itemgetter(goal.src, goal.dst)(self.timetable.stops)
+
+		journeys = self.router.query_earliest_arrival(goal.src, goal.dst, goal.dts_start)
 		self.checks.assert_journey_results(test, journeys)
+
+
+def load_tests(loader, tests, pattern):
+	# XXX: because unittest in pypy3/3.3 doesn't have subTest ctx yet
+	return unittest.makeSuite(GTFS_Shizuoka_20161013)
