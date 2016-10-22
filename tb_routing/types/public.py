@@ -26,7 +26,10 @@ class Stop:
 
 class Stops:
 	def __init__(self): self.set_idx = dict()
-	def add(self, stop): self.set_idx[stop.id] = stop
+	def add(self, stop):
+		if stop.id in self.set_idx: stop = self.set_idx[stop.id]
+		else: self.set_idx[stop.id] = stop
+		return stop
 	def __getitem__(self, stop_id): return self.set_idx[stop_id]
 	def __len__(self): return len(self.set_idx)
 	def __iter__(self): return iter(self.set_idx.values())

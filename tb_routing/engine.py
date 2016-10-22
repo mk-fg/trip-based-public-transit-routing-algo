@@ -36,7 +36,7 @@ class TBRoutingEngine:
 	def progress_iter(self, prefix, n_max, steps=30, n=0):
 		'Progress logging helper coroutine for long calculations.'
 		steps = min(n_max, steps)
-		step_n = n_max / steps
+		step_n = steps and n_max / steps
 		msg_tpl = '[{{}}] Step {{:>{0}.0f}} / {{:{0}d}}{{}}'.format(len(str(steps)))
 		while True:
 			dn_msg = yield

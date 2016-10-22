@@ -68,8 +68,8 @@ def parse_gtfs_timetable(gtfs_dir, conf):
 					else: continue
 				else: dts_arr = trip[-1].dts_dep # "scheduled based on the nearest preceding timed stop"
 			if not dts_dep: dts_dep = dts_arr + conf.stop_linger_time_default
-			stops.add(stops_dict[ts.stop_id])
-			trip.add(types.TripStop(trip, stopidx, stops[ts.stop_id], dts_arr, dts_dep))
+			stop = stops.add(stops_dict[ts.stop_id])
+			trip.add(types.TripStop(trip, stopidx, stop, dts_arr, dts_dep))
 		if trip: trips.add(trip)
 
 	footpaths = types.Footpaths()
