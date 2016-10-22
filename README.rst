@@ -35,8 +35,8 @@ Tests
 Commands to run tests from checkout directory::
 
   % python3 -m unittest test.all
-  % python3 -m unittest test.simple
   % python3 -m unittest test.gtfs_shizuoka
+  % python3 -m unittest -v test.simple
 
 ``test.all.case`` also provides global index of all test cases by name::
 
