@@ -3,7 +3,7 @@ from pathlib import Path
 from pprint import pprint
 import os, sys, unittest
 
-from . import common
+from . import _common as c
 
 
 class GTFS_Shizuoka_20161013(unittest.TestCase):
@@ -12,10 +12,10 @@ class GTFS_Shizuoka_20161013(unittest.TestCase):
 	def setUpClass(cls):
 		path_file = Path(__file__)
 		path_gtfs_zip = path_file.parent / (path_file.stem + '.data.2016-10-13.zip')
-		cls.fx = common.GTFSTestFixture(path_gtfs_zip, path_file)
-		cls.timetable, cls.router = common.gtfs_cli.init_gtfs_router(
-			cls.fx.path_unzip, cls.fx.path_cache, timer_func=common.gtfs_cli.calc_timer )
-		cls.checks = common.GraphAssertions(cls.router.graph)
+		cls.fx = c.GTFSTestFixture(path_gtfs_zip, path_file)
+		cls.timetable, cls.router = c.gtfs_cli.init_gtfs_router(
+			cls.fx.path_unzip, cls.fx.path_cache, timer_func=c.gtfs_cli.calc_timer )
+		cls.checks = c.GraphAssertions(cls.router.graph)
 
 	@classmethod
 	def tearDownClass(cls): pass
@@ -25,8 +25,8 @@ class GTFS_Shizuoka_20161013(unittest.TestCase):
 		test = self.fx.load_test_data('J22209723-J2220952426')
 		self.checks.assert_journey_components(test)
 
-		goal = common.struct_from_val(test.goal, common.TestGoal)
-		goal.dts_start = common.dts_parse(goal.dts_start)
+		goal = c.struct_from_val(test.goal, c.TestGoal)
+		goal.dts_start = c.dts_parse(goal.dts_start)
 		goal.src, goal.dst = op.itemgetter(goal.src, goal.dst)(self.timetable.stops)
 
 		journeys = self.router.query_earliest_arrival(goal.src, goal.dst, goal.dts_start)
