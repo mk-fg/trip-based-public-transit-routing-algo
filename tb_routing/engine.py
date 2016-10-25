@@ -106,6 +106,10 @@ class TBRoutingEngine:
 						for trip_u in line:
 							if dts_q <= trip_u[j].dts_dep: break
 						else: continue # all trips for L(q) have departed by dts_q
+						if not (
+							line is not lines.line_for_trip(trip_t)
+							or trip_u.compare(trip_t) is t.public.SolutionStatus.non_dominated
+							or j < i ): continue
 						transfers.add(t.internal.Transfer(trip_t, i, trip_u, j))
 
 		self.log.debug('Initial transfer set size: {:,}', len(transfers))
