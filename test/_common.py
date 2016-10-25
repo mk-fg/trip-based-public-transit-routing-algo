@@ -212,7 +212,7 @@ class GTFSTestFixture:
 				for name in files: yield (p / name).stat().st_mtime
 		mtime_src = max(paths_src_mtimes())
 		mtime_cache = 0 if not self._path_cache.exists() else self._path_cache.stat().st_mtime
-		if mtime_src > mtime_cache:
+		if mtime_cache and mtime_src > mtime_cache:
 			warnings.warn( 'Existing timetable/transfer cache'
 				' file is older than code, but using it anyway: {}'.format(self._path_cache) )
 		return self._path_cache
