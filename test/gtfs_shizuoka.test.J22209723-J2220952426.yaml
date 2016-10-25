@@ -13,13 +13,13 @@ journey_set:
       trip-M: [trip, J22209723_0, J222093340_2]
       trip-N: [trip, J222093340_2, J2220952426_0]
 
-  journey-B:
-    stats: ['06:10', '06:59']
-    segments:
-      trip-X: [trip, J22209723_0, J22209746_0]
-      trip-Y: [trip, J22209746_0, J22209786_0]
-      walk: [fp, J22209786_0, J22209787_1] # ~150m
-      trip-Z: [trip, J22209787_1, J2220952426_0]
+  # journey-B:
+  #   stats: ['06:10', '06:59']
+  #   segments:
+  #     trip-X: [trip, J22209723_0, J22209746_0]
+  #     trip-Y: [trip, J22209746_0, J22209786_0]
+  #     walk: [fp, J22209786_0, J22209787_1] # ~150m
+  #     trip-Z: [trip, J22209787_1, J2220952426_0]
 
   # journey-C:
   #   stats: ['08:20', '10:53']

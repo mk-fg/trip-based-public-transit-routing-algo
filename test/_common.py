@@ -2,7 +2,7 @@ import itertools as it, operator as op, functools as ft
 from collections import ChainMap, Mapping, OrderedDict
 from pathlib import Path
 from pprint import pprint
-import os, sys, unittest, types, datetime, re
+import os, sys, unittest, types, datetime, re, math
 import runpy, tempfile, warnings, shutil, zipfile
 
 import yaml # PyYAML module is required for tests
@@ -257,6 +257,48 @@ class GraphAssertions:
 	dts_slack = 3 * 60
 
 	def __init__(self, graph=None): self.graph = graph
+
+
+	def debug_transfers(self, stop1, stop2, stop3, max_km=0.2, max_td=3600, graph=None):
+		'''Show info on possible stop-1 -> stop-2 -> stop-3
+			transfers between trips, going only by timetable data.'''
+		stop1, stop2, stop3 = (graph.timetable.stops[s] for s in [stop1, stop2, stop3])
+		graph = graph or self.graph
+
+		for (n1_min, line1), (n2_max, line2) in it.product(
+				graph.lines.lines_with_stop(stop1), graph.lines.lines_with_stop(stop3) ):
+
+			for ts1 in line1[0]:
+				if ts1.stop == stop2: break
+			else: continue
+			for ts2 in line2[0]:
+				if ts2.stop == stop2: break
+			else: continue
+			n1_max, n2_min = ts1.stopidx, ts2.stopidx
+
+			for ts1, ts2 in it.product(line1[0][n1_min:n1_max+1], line2[0][n2_min:n2_max+1]):
+				n1, n2 = ts1.stopidx, ts2.stopidx
+
+				if ts1.stop == ts2.stop: km = 0
+				else:
+					lon1, lat1, lon2, lat2 = (
+						math.radians(float(v)) for v in
+						[ts1.stop.lon, ts1.stop.lat, ts2.stop.lon, ts2.stop.lat] )
+					km = 6367 * 2 * math.asin(math.sqrt(
+						math.sin((lat2 - lat1)/2)**2 +
+						math.cos(lat1) * math.cos(lat2) * math.sin((lon2 - lon1)/2)**2 ))
+
+				if km <= max_km:
+					print(
+						'X-{}: {:.4f} {:.4f}\n  walk: {:,.1f}m\n  Y-{}: {:.4f} {:.4f}'.format(
+						n1, ts1.stop.lon, ts1.stop.lat, km * 1000, n2, ts2.stop.lon, ts2.stop.lat ))
+					for trip1, trip2 in it.product(line1, line2):
+						ts1, ts2 = trip1[n1], trip2[n2]
+						td = ts2.dts_dep - ts1.dts_arr
+						if 0 <= td <= max_td:
+							print('  X-arr: {} -> Y-dep: {} (delta: {:,.1f}s)'.format(
+								dts_format(ts1.dts_arr), dts_format(ts2.dts_dep), td ))
+					print()
 
 
 	def assert_journey_components(self, test, graph=None, verbose=verbose):
