@@ -103,9 +103,8 @@ class TBRoutingEngine:
 					dts_q = ts_p.dts_arr + dt_fp
 					for j, line in lines.lines_with_stop(stop_q):
 						if j == len(line[0]) - 1: continue # "do not add any transfers ... to the last stop"
-						for trip_u in line:
-							if dts_q <= trip_u[j].dts_dep: break
-						else: continue # all trips for L(q) have departed by dts_q
+						trip_u = line.earliest_trip(j, dts_q)
+						if not trip_u: continue # all trips for L(q) have departed by dts_q
 						if not (
 							line is not lines.line_for_trip(trip_t)
 							or trip_u.compare(trip_t) is t.public.SolutionStatus.non_dominated
