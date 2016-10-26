@@ -1,7 +1,4 @@
 
-- Fix remaining querying issues, so that at least all journeys that
-  OpenTripPlanner can find are returned.
-
 - Implement calendar processing and checks during queries.
 
 - Implement profile queries and algo optimizations from the arXiv:1607.01299v2
