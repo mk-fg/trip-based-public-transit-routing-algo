@@ -13,3 +13,9 @@
 - Implement more complex criterias for "stop change time", fares, priorities and
   similar things, which are currently either simplified to fixed values
   (e.g. TBRoutingEngine.dt_ch) or not considered at all.
+
+- Fix some quirks with resulting journeys in a more clean fashion - prune extra
+  footpaths, minimize journey-time, etc.
+
+  See gtfs_shizuoka.test.J22209723-J2220952426.yaml and comments/algo-tweaks in
+  engine.py for details.
