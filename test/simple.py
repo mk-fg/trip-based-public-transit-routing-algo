@@ -7,20 +7,28 @@ from . import _common as c
 
 @c.tb.u.attr_struct
 class TestTripStop: keys = 'stop_id dts_arr dts_dep'
+@c.tb.u.attr_struct
+class TestFootpath: keys = 'src dst dt'
 
 class SimpleTestCase(unittest.TestCase):
 
 	dt_ch = 2*60 # fixed time-delta overhead for changing trips (i.e. p->p footpaths)
 
 	def __init__(self, test_name, test_data):
-		self.test_data = test_data
+		self.test_name, self.test_data = test_name, test_data
 		setattr(self, test_name, self.run_test)
 		super(SimpleTestCase, self).__init__(test_name)
 
 	def init_router(self):
 		types = c.tb.t.public
 		trips, stops, footpaths = types.Trips(), types.Stops(), types.Footpaths()
-		for trip_id, trip_data in self.test_data.timetable.items():
+
+		tt = self.test_data.timetable or dict()
+		if not set(tt.keys()).difference(['trips', 'footpaths']):
+			tt_trips, tt_footpaths = (tt.get(k) for k in ['trips', 'footpaths'])
+		else: tt_trips, tt_footpaths = self.test_data.timetable, list()
+
+		for trip_id, trip_data in tt_trips.items():
 			trip = types.Trip()
 			for stopidx, ts in enumerate(trip_data):
 				stop_id, dts_arr, dts_dep = c.struct_from_val(ts, TestTripStop, as_tuple=True)
@@ -30,7 +38,13 @@ class SimpleTestCase(unittest.TestCase):
 				stop = stops.add(types.Stop(stop_id, stop_id, 0, 0))
 				trip.add(types.TripStop(trip, stopidx, stop, dts_arr, dts_dep))
 			trips.add(trip)
+
+		for spec in tt_footpaths:
+			src_id, dst_id, dt = c.struct_from_val(spec, TestFootpath, as_tuple=True)
+			src, dst = (stops.add(types.Stop(s, s, 0, 0)) for s in [src_id, dst_id])
+			footpaths.add(src, dst, dt * 60)
 		for stop in stops: footpaths.add(stop, stop, self.dt_ch)
+
 		timetable = types.Timetable(stops, footpaths, trips)
 		router = c.tb.engine.TBRoutingEngine(timetable, timer_func=c.gtfs_cli.calc_timer)
 		checks = c.GraphAssertions(router.graph)

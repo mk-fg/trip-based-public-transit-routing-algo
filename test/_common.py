@@ -259,11 +259,11 @@ class GraphAssertions:
 	def __init__(self, graph=None): self.graph = graph
 
 
-	def debug_transfers(self, stop1, stop2, stop3, max_km=0.2, max_td=3600, graph=None):
-		'''Show info on possible stop-1 -> stop-2 -> stop-3
-			transfers between trips, going only by timetable data.'''
-		stop1, stop2, stop3 = (graph.timetable.stops[s] for s in [stop1, stop2, stop3])
+	def debug_trip_transfers(self, stop1, stop2, stop3, max_km=0.2, max_td=3600, graph=None):
+		'''Show info on possible T[stop-1] -> T[stop-2] -> U[stop-2] -> U[stop-3]
+			transfers between trips (both passing stop-2), going only by timetable data.'''
 		graph = graph or self.graph
+		stop1, stop2, stop3 = (graph.timetable.stops[s] for s in [stop1, stop2, stop3])
 
 		for (n1_min, line1), (n2_max, line2) in it.product(
 				graph.lines.lines_with_stop(stop1), graph.lines.lines_with_stop(stop3) ):
@@ -333,9 +333,10 @@ class GraphAssertions:
 						else: continue
 						for trip in line:
 							for ts in ts_transfer_chk:
-								for k, (t1, n1, t2, n2) in graph.transfers.from_trip_stop(ts.trip, ts.stopidx):
-									if t2[n2].stop is trip[n].stop: break
-								else: continue
+								if not (ts.trip.id == trip.id and ts.stop is a):
+									for k, (_, _, t2, n2) in graph.transfers.from_trip_stop(ts.trip, ts.stopidx):
+										if t2[n2].stop is trip[n].stop: break
+									else: continue
 								ts_transfer_found = True
 								ts_transfer_chk.clear()
 								break
@@ -345,7 +346,23 @@ class GraphAssertions:
 						line_found = True
 					if not line_found: raise_error('No Lines/Trips found for trip-segment')
 
-				elif seg.type == 'fp': raise NotImplementedError
+				elif seg.type == 'fp':
+					try: graph.timetable.footpaths.between(a, b)
+					except KeyError:
+						raise_error('No footpath-transfer found between src/dst')
+					for ts in ts_transfer_chk:
+						if ts.stop is not a: continue
+						ts_transfer_found = True
+						ts_transfer_chk.clear()
+						break
+					for m, line in graph.lines.lines_with_stop(b):
+						for trip in line:
+							# if b is goal_dst: ts_last.add(trip[m])
+							ts_transfer.add(trip[m])
+							line_found = True
+					if not line_found and b is not goal_dst:
+						raise_error('No Lines/Trips found for footpath-segment dst')
+
 				else: raise NotImplementedError
 
 				if not ts_transfer_found and a is not goal_src:
@@ -357,7 +374,7 @@ class GraphAssertions:
 			# Check start/end times
 			seg_name = None
 			for k, ts_set, chk in [('dts_dep', ts_first, jn_start), ('dts_arr', ts_last, jn_end)]:
-				dt_min = min(abs(chk - getattr(ts, k)) for ts in ts_set)
+				dt_min = min(abs(chk - getattr(ts, k)) for ts in ts_set) if ts_set else 0
 				if dt_min > self.dts_slack:
 					if verbose:
 						print('[{}] All TripStops for {} goal-point:'.format(jn_name, k))

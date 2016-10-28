@@ -98,3 +98,110 @@ testNoRouteBecauseOfMissedConnection:
   goal: [A, N, '9:00']
 
   journey_set:
+
+
+testRouteToNonTimetabledConnection:
+  timetable:
+    trips:
+      CS1235:
+        - [A, x, '10:10']
+        - [B, '10:20', '10:25']
+        - [C, '10:40', x]
+    footpaths:
+      - [B, D, 30]
+
+  goal: [A, D, '10:00']
+
+  journey_set:
+    journey-A:
+      stats: ['10:10', '10:50']
+      segments:
+        trip: [trip, A, B]
+        walk: [fp, B, D]
+
+
+testRouteFromNonTimetabledConnection:
+  timetable:
+    trips:
+      CS1235:
+        - [A, x, '10:10']
+        - [B, '10:20', '10:25']
+        - [C, '10:40', '11:00']
+        - [D, '11:20', x]
+    footpaths:
+      - [X, B, 30]
+
+  goal: [X, C, '9:00']
+
+  journey_set:
+    journey-A:
+      stats: ['9:55', '10:40']
+      segments:
+        walk: [fp, X, B]
+        trip: [trip, B, C]
+
+
+testRouteWithNonTimetabledConnection:
+  timetable:
+    trips:
+      CS1235:
+        - [A, x, '10:10']
+        - [B, '10:20', '10:25']
+        - [C, '10:40', x]
+      CS1236:
+        - [M, x, '11:00']
+        - [N, '11:50', '11:55']
+        - [X, '12:00', x]
+    footpaths:
+      - [B, M, 30]
+      - [C, N, 120]
+
+  goal: [A, X, '10:00']
+
+  journey_set:
+    journey-A:
+      stats: ['10:10', '12:00']
+      segments:
+        trip-1: [trip, A, B]
+        walk: [fp, B, M]
+        trip-2: [trip, M, X]
+
+
+testRouteWithNonTimetabledConnectionThatCantBeUsed:
+  timetable:
+    trips:
+      CS1235:
+        - [A, x, '10:10']
+        - [M, '10:35', '10:45']
+        - [X, '11:30', x]
+      CS1236:
+        - [Y, x, '11:30']
+        - [N, '11:40', x]
+    footpaths:
+      - [M, Y, 60]
+      # - [Y, M, 1]
+      - [X, Y, 1]
+
+  goal: [A, N, '9:00']
+
+  journey_set:
+
+
+# testNonTimetableOnly:
+#   timetable:
+#     trips:
+#       CS1235:
+#         - [A, x, '10:00']
+#         - [B, '10:15', '10:20']
+#         - [C, '10:45', '11:00']
+#         - [D, '11:15', x]
+#     footpaths:
+#       - [A, D, 30]
+
+#   goal: [A, D, '9:00']
+
+#   journey_set:
+#     journey-A:
+#       stats: ['9:00', '9:30']
+#       segments:
+#         walk: [fp, A, D]
