@@ -187,21 +187,21 @@ testRouteWithNonTimetabledConnectionThatCantBeUsed:
   journey_set:
 
 
-# testNonTimetableOnly:
-#   timetable:
-#     trips:
-#       CS1235:
-#         - [A, x, '10:00']
-#         - [B, '10:15', '10:20']
-#         - [C, '10:45', '11:00']
-#         - [D, '11:15', x]
-#     footpaths:
-#       - [A, D, 30]
+testNonTimetableOnly:
+  timetable:
+    trips:
+      CS1235:
+        - [A, x, '10:00']
+        - [B, '10:15', '10:20']
+        - [C, '10:45', '11:00']
+        - [D, '11:15', x]
+    footpaths:
+      - [A, D, 30]
 
-#   goal: [A, D, '9:00']
+  goal: [A, D, '9:00']
 
-#   journey_set:
-#     journey-A:
-#       stats: ['9:00', '9:30']
-#       segments:
-#         walk: [fp, A, D]
+  journey_set:
+    journey-A:
+      stats: ['9:00', '9:30']
+      segments:
+        walk: [fp, A, D]

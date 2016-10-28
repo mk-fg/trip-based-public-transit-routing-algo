@@ -221,8 +221,9 @@ class TBRoutingEngine:
 		for stop_q, dt_fp in timetable.footpaths.to_stops_from(stop_src):
 			if stop_q is stop_src: dt_fp = 0
 			dts_q = dts_src + dt_fp
-			journey = t.public.Journey()
+			journey = t.public.Journey(dts_src)
 			journey.append_fp(stop_src, stop_q, dt_fp)
+			if stop_q is stop_dst: journeys.add(journey)
 			for i, line in lines.lines_with_stop(stop_q):
 				## Note: "t ← earliest trip" is usually not desirable as a first trip.
 				##  I.e. you'd usually prefer to pick latest trip possible to min dep-to-arr time.

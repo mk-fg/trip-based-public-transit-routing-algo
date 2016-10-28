@@ -123,6 +123,7 @@ JourneyFp = namedtuple('JFootpath', 'stop_from stop_to dt')
 
 @u.attr_struct(slots=False, hash=False, repr=False)
 class Journey:
+	dts_start = u.attr_init()
 	segments = u.attr_init(list)
 
 	_stats_cache = None
@@ -139,6 +140,8 @@ class Journey:
 					fp_count += 1
 					dts_arr = dts_arr + seg.dt
 					if dts_dep is None: dts_dep_fp += seg.dt
+			if dts_dep is None: # no trips, only footpaths
+				dts_dep, dts_arr = self.dts_start, self.dts_start + dts_arr
 			self._stats_cache = dts_arr, dts_dep, trip_count, fp_count
 		return self._stats_cache
 
