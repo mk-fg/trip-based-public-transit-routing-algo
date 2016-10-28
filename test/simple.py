@@ -45,7 +45,7 @@ class SimpleTestCase(unittest.TestCase):
 			footpaths.add(src, dst, dt * 60)
 		for stop in stops: footpaths.add(stop, stop, self.dt_ch)
 
-		timetable = types.Timetable(stops, footpaths, trips)
+		timetable = types.Timetable(self.dt_ch, stops, footpaths, trips)
 		router = c.tb.engine.TBRoutingEngine(timetable, timer_func=c.gtfs_cli.calc_timer)
 		checks = c.GraphAssertions(router.graph)
 		return timetable, router, checks

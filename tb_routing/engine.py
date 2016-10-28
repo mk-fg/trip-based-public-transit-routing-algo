@@ -4,20 +4,14 @@ from collections import defaultdict, namedtuple, deque
 from . import utils as u, types as t
 
 
-@u.attr_struct(vals_to_attrs=True)
-class EngineConf:
-	dt_ch = 2*60 # Fixed time-delta overhead for changing trips (i.e. p->p footpaths)
-
-
 class TBRoutingEngine:
 
 	graph = None
 
-	def __init__(self, timetable=None, conf=None, cached_graph=None, timer_func=None):
+	def __init__(self, timetable=None, cached_graph=None, timer_func=None):
 		'''Creates Trip-Based Routing Engine from Timetable data.'''
 		self.log = u.get_logger('tb')
 		self.timer_wrapper = timer_func if timer_func else lambda f,*a,**k: func(*a,**k)
-		self.conf = conf or EngineConf()
 
 		graph = cached_graph
 		if not graph:
@@ -85,7 +79,7 @@ class TBRoutingEngine:
 	def precalc_transfer_set(self, timetable, lines):
 		# Precalculation steps here are not merged and not parallelized in any way.
 		transfers = self._pre_initial_set(timetable, lines) # Algorithm 1
-		transfers = self._pre_remove_u_turns(transfers) # Algorithm 2
+		transfers = self._pre_remove_u_turns(transfers, timetable.dt_ch) # Algorithm 2
 		transfers = self._pre_reduction(timetable, transfers) # Algorithm 3
 		self.log.debug('Precalculated transfer set size: {:,}', len(transfers))
 		return transfers
@@ -115,14 +109,14 @@ class TBRoutingEngine:
 		return transfers
 
 	@timer
-	def _pre_remove_u_turns(self, transfers):
+	def _pre_remove_u_turns(self, transfers, dt_ch):
 		'Algorithm 2: Remove U-turn transfers.'
 		transfers_discard = list()
 		for k, (trip_t, i, trip_u, j) in transfers:
 			try: ts_t, ts_u = trip_t[i-1], trip_u[j+1]
 			except IndexError: continue
 			if ( ts_t.stop == ts_u.stop
-					and ts_t.dts_arr + self.conf.dt_ch <= ts_u.dts_dep ):
+					and ts_t.dts_arr + dt_ch <= ts_u.dts_dep ):
 				transfers_discard.append(k)
 		transfers.discard(transfers_discard)
 		self.log.debug('Discarded U-turns: {:,}', len(transfers_discard))

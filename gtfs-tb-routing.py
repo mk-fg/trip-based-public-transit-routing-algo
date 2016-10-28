@@ -83,7 +83,7 @@ def parse_gtfs_timetable(gtfs_dir, conf):
 		'Parsed timetable: stops={:,}, footpaths={:,}'
 			' (mean_dt={:,.1f}s), trips={:,} (mean_stops={:,.1f})',
 		len(stops), len(footpaths), footpaths.stat_mean_dt(), len(trips), trips.stat_mean_stops() )
-	return types.Timetable(stops, footpaths, trips)
+	return types.Timetable(conf.dt_ch, stops, footpaths, trips)
 
 
 def dts_parse(dts_str):
