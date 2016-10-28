@@ -12,10 +12,13 @@ following papers:
 - Trip-Based Public Transit Routing Using Condensed Search Trees
   (`arXiv:1607.01299v2`_, 2016)
 
-Not focused on performance yet, more on readability and correctnes aspects
-first, i.e. to have something working.
+...with source data parsed from `GTFS feeds
+<https://developers.google.com/transit/gtfs/>`_.
 
-Under heavy development, not really usable yet.
+Not focused on performance, more on readability and correctness aspects,
+i.e. just to have something working.
+
+Under heavy development.
 
 |
 
@@ -24,10 +27,101 @@ Under heavy development, not really usable yet.
 
 
 
+Usage
+-----
+
+There's command-line ``gtfs-tb-routing.py`` script that builds timetable from
+GTFS source data, initializes routing engine with it and runs queries on that,
+but routing engine itself can be used separately.
+
+Regardless of interface, highly recommend using PyPy3 (3.3+) to run the thing,
+as it gives orders-of-magnitude performance boost here over CPython, and
+transfer-set pre-calculation with large datasets can take a while.
+
+Also, as mentioned, no attempt at multi-thread or memory optimizations is made
+here, so it will take much longer than necessary and eat all the RAM regardless.
+
+
+Command-line script
+```````````````````
+
+Usage: ``./gtfs-tb-routing.py gtfs-data-dir stop-id-src stop-id-dst [start-time]``
+
+That runs earliest-arrival/min-transfers bi-criteria query on (unpacked) GTFS
+data from specified dir and pretty-prints resulting pareto-optimal JourneySet to
+stdout.
+
+Some sample GTFS data zips can be found in ``test/`` directory.
+
+Links to many open real-world GTFS feeds are available at `transit.land
+<https://transit.land/>`_ repository.
+
+Example usage::
+
+  % unzip test/gtfs_shizuoka.data.2016-10-13.zip -d gtfs-shizuoka
+  Archive:  test/gtfs_shizuoka.data.2016-10-13.zip
+    inflating: gtfs-shizuoka/agency.txt
+    inflating: gtfs-shizuoka/routes.txt
+    inflating: gtfs-shizuoka/trips.txt
+    inflating: gtfs-shizuoka/stops.txt
+    inflating: gtfs-shizuoka/calendar_dates.txt
+    inflating: gtfs-shizuoka/stop_times.txt
+    inflating: gtfs-shizuoka/shapes.txt
+
+  % time ./gtfs-tb-routing.py gtfs-shizuoka -c gtfs-shizuoka.cache.pickle J22209723_0 J2220952426_0
+  Journey set (1):
+
+    Journey 55a48f09a250 (arrival: 08:43:00, trips: 1):
+      trip [97]:
+        from (dep at 08:35:00): 20:島田駅 北口２番のりば [J222093340_2]
+        to (arr at 08:43:00): 28:ばらの丘一丁目 [J2220952426_0]
+  ./gtfs-tb-routing.py ... 8.39s user 0.07s system 99% cpu 8.474 total
+
+  % time ./gtfs-tb-routing.py gtfs-shizuoka -c gtfs-shizuoka.cache.pickle J22209843_0 J222093345_0
+  Journey set (1):
+
+    Journey 7f2c9befc058 (arrival: 07:41:00, trips: 1):
+      trip [7]:
+        from (dep at 07:33:00): 38:島田駅 北口２番のりば [J222093340_2]
+        to (arr at 07:41:00): 45:島田市民病院 [J222093345_0]
+  ./gtfs-tb-routing.py ... 0.83s user 0.05s system 99% cpu 0.883 total
+
+Note that second query is much faster due to ``--cache gtfs-shizuoka.cache.pickle``
+option, which allows to reuse pre-calculated data from the first query.
+
+Use ``-d/--debug`` option to see pre-calculation progress (useful for large
+datasets) and misc other stats and logging.
+
+
+Routing engine
+``````````````
+
+``tb_routing.engine`` module implements actual routing, and can be used with any
+kind of timetable data source, passed as a ``tb_routing.types.public.Timetable``
+to it on init.
+
+Subsequent queries to engine instance return ``tb_routing.types.public.JourneySet``.
+
+See `test/simple.py <test/simple.py>`_ for example of how such Timetable can be
+constructed and queried with trivial test-data.
+
+
+Requirements
+````````````
+
+- Python 3.x
+- `attrs <https://attrs.readthedocs.io/en/stable/>`_
+- (for tests only) `PyYAML <http://pyyaml.org/>`_
+- (for Python<3.4 only) `pathlib <https://pypi.python.org/pypi/pathlib2/>`_
+- (for Python<3.4 only) `enum34 <https://pypi.python.org/pypi/enum34/>`_
+
+
+
 Notes
 -----
 
 Some less obvious things are described in this section.
+
 
 Tests
 `````
@@ -43,16 +137,6 @@ Commands to run tests from checkout directory::
   % python3 -m unittest test.all.case.test_journeys_J22209723_J2220952426
   % python3 -m unittest test.all.case.testMultipleRoutes
 
-
-
-Requirements
-------------
-
-- Python 3.x
-- `attrs <https://attrs.readthedocs.io/en/stable/>`_
-- (for tests only) `PyYAML <http://pyyaml.org/>`_
-- (for Python<3.4 only) `pathlib <https://pypi.python.org/pypi/pathlib2/>`_
-- (for Python<3.4 only) `enum34 <https://pypi.python.org/pypi/enum34/>`_
 
 
 Links
