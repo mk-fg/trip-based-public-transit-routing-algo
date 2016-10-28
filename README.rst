@@ -167,7 +167,10 @@ More on the subject:
 
 - `transit.land open GTFS transit data feeds/repository <https://transit.land/>`_
 
-- `open-track project <https://github.com/open-track>`_
+- Github orgs/groups related to transportation maps/routing:
+
+  - `open-track <https://github.com/open-track>`_
+  - `OpenTransport <https://github.com/OpenTransport>`_
 
 
 .. _arXiv\:1504.07149v2: https://arxiv.org/abs/1504.07149
