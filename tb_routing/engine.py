@@ -196,12 +196,13 @@ class TBRoutingEngine:
 			subqueue.clear()
 
 		def enqueue(trip, i, n, journey, _ss=t.public.SolutionStatus):
-			if i >= R.get(trip, u.inf): return
+			i_max = len(trip) - 1 # for the purposes of "infinity" here
+			if i >= R.get(trip, i_max): return
 			Q.setdefault(n, deque()).append(
-				TripSegment(trip, i, R.get(trip, len(trip)-1), journey) )
+				TripSegment(trip, i, R.get(trip, i_max), journey) )
 			for trip_u in lines.line_for_trip(trip)\
 					.trips_by_relation(trip, _ss.non_dominated, _ss.equal):
-				R[trip_u] = min(i, R.get(trip_u, u.inf))
+				R[trip_u] = min(i, R.get(trip_u, i_max))
 
 		lines_to_dst = dict() # (i, line, dt) indexed by trip
 		for stop_q, dt_fp in timetable.footpaths.from_stops_to(stop_dst):

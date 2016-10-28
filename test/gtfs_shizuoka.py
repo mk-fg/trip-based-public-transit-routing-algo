@@ -20,9 +20,8 @@ class GTFS_Shizuoka_20161013(unittest.TestCase):
 	@classmethod
 	def tearDownClass(cls): pass
 
-
-	def test_journeys_J22209723_J2220952426(self):
-		test = self.fx.load_test_data('J22209723-J2220952426')
+	def _test_journeys_base(self, data_name):
+		test = self.fx.load_test_data(data_name)
 		self.checks.assert_journey_components(test)
 
 		goal = c.struct_from_val(test.goal, c.TestGoal)
@@ -31,6 +30,16 @@ class GTFS_Shizuoka_20161013(unittest.TestCase):
 
 		journeys = self.router.query_earliest_arrival(goal.src, goal.dst, goal.dts_start)
 		self.checks.assert_journey_results(test, journeys)
+
+
+	def test_journeys_J22209723_J2220952426(self):
+		self._test_journeys_base('J22209723-J2220952426')
+
+	def test_journeys_J22209843_J222093345(self):
+		self._test_journeys_base('J22209843-J222093345')
+
+	def test_journeys_J22209730_J22209790(self):
+		self._test_journeys_base('J22209730-J22209790')
 
 
 def load_tests(loader, tests, pattern):

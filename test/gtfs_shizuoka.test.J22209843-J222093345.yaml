@@ -1,0 +1,13 @@
+goal:
+  dts_start: 06:00
+  src: J22209843_0
+  dst: J222093345_0
+
+journey_set:
+
+  journey-A:
+    stats: ['07:02', '07:41']
+    segments:
+      trip-X: [trip, J22209843_0, J222093340_1]
+      walk: [fp, J222093340_1, J222093340_2]
+      trip-Y: [trip, J222093340_2, J222093345_0]
