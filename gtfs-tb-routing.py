@@ -72,17 +72,20 @@ def parse_gtfs_timetable(gtfs_dir, conf):
 			trip.add(types.TripStop(trip, stopidx, stop, dts_arr, dts_dep))
 		if trip: trips.add(trip)
 
-	footpaths = types.Footpaths()
+	footpaths, fp_samestop_count = types.Footpaths(), 0
 	fp_dt = ft.partial( footpath_dt, dt_ch=conf.dt_ch,
 		dt_base=conf.footpath_dt_base, speed_kmh=conf.footpath_speed_kmh )
 	for stop_a, stop_b in it.combinations_with_replacement(list(stops), 2):
 		footpaths.add(stop_a, stop_b, fp_dt(stop_a, stop_b))
+		if stop_a is stop_b: fp_samestop_count += 1
 	footpaths.discard_longer(conf.footpath_dt_max)
 
 	log.debug(
 		'Parsed timetable: stops={:,}, footpaths={:,}'
-			' (mean_dt={:,.1f}s), trips={:,} (mean_stops={:,.1f})',
-		len(stops), len(footpaths), footpaths.stat_mean_dt(), len(trips), trips.stat_mean_stops() )
+			' (mean_dt={:,.1f}s, same-stop={:,}), trips={:,} (mean_stops={:,.1f})',
+		len(stops),
+		len(footpaths), footpaths.stat_mean_dt(), fp_samestop_count,
+		len(trips), trips.stat_mean_stops() )
 	return types.Timetable(conf.dt_ch, stops, footpaths, trips)
 
 

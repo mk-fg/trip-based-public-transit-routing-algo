@@ -179,7 +179,7 @@ class TBRoutingEngine:
 		TripSegment = namedtuple('TripSeg', 'trip stopidx_a stopidx_b journey')
 
 		journeys = t.public.JourneySet()
-		R, Q = dict(), dict()
+		R, Q = dict(), dict() # XXX: should be returned/preserved for profile queries
 
 		## Note: this sub-queue is used fix original algo's quirk where
 		##   additional unnecessary footpaths are not factored into optimality.
@@ -255,3 +255,11 @@ class TBRoutingEngine:
 			n += 1
 
 		return journeys
+
+
+	@timer
+	def query_profile(self, stop_src, stop_dst, dts_edt, dts_ldt):
+		'''Profile query, returning a list of pareto-optimal JourneySet results with Journeys
+				from stop_src to stop_dst, with departure at stop_src in a day-time (dts) interval
+				from dts_edt (earliest departure time) to dts_ldt (latest).'''
+		raise NotImplementedError
