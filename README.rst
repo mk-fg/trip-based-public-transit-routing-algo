@@ -15,10 +15,11 @@ following papers:
 ...with source data parsed from `GTFS feeds
 <https://developers.google.com/transit/gtfs/>`_.
 
-Not focused on performance, more on readability and correctness aspects,
-i.e. just to have something working.
+Not focused on performance, only readability and correctness aspects,
+i.e. just a proof of concept, not suitable for any kind of production use.
 
-Under heavy development.
+Under heavy development, see `doc/TODO <doc/TODO>`_ file for a general list
+of things that are not (yet?) implemented.
 
 |
 
@@ -130,6 +131,13 @@ Notes
 Some less obvious things are described in this section.
 
 
+Caching
+```````
+
+For large datasets, using pickle cache to (de-)serialize graphs can be slower
+than re-calculating whole thing from scratch, so might not be worth using.
+
+
 Tests
 `````
 
@@ -143,6 +151,22 @@ Commands to run tests from checkout directory::
 
   % python3 -m unittest test.all.case.test_journeys_J22209723_J2220952426
   % python3 -m unittest test.all.case.testMultipleRoutes
+
+
+Performance Optimization
+````````````````````````
+
+Pre-calculation in Trip-Based routing algorithm, as noted in paper, is very
+suitable for further optimization from how it's presented in the paper -
+i.e. three separate "steps" can be merged into one loop, running processing of
+transfers for each trip in parallel.
+
+Python does not provide an easy way to optimize such processing, especially due
+to slow serialization of high-level objects and lack of support for cpu-bound
+threads working in shared memory.
+
+Workarounds are possible, but it's probably not worth considering python code
+for any kind of production use.
 
 
 
