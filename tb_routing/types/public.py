@@ -154,7 +154,10 @@ class Journey:
 	@property
 	def fp_count(self): return self._stats()[3]
 
-	def copy(self): return Journey(self.segments.copy())
+	def copy(self):
+		attrs = u.attr.asdict(self)
+		attrs['segments'] = self.segments.copy()
+		return Journey(**attrs)
 
 	def append_trip(self, *jtrip_args, **jtrip_kws):
 		self.segments.append(JourneyTrip(*jtrip_args, **jtrip_kws))

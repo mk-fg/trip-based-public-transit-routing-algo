@@ -71,20 +71,29 @@ Example usage::
   % time ./gtfs-tb-routing.py gtfs-shizuoka -c gtfs-shizuoka.cache.pickle J22209723_0 J2220952426_0
   Journey set (1):
 
-    Journey 55a48f09a250 (arrival: 08:43:00, trips: 1):
+    Journey 5596f26afe50 (arrival: 08:43:00, trips: 2):
+      trip [95]:
+        from (dep at 06:10:00): 10:小川 [J22209723_0]
+        to (arr at 06:55:00): 49:島田駅 北口２番のりば [J222093340_2]
       trip [97]:
         from (dep at 08:35:00): 20:島田駅 北口２番のりば [J222093340_2]
         to (arr at 08:43:00): 28:ばらの丘一丁目 [J2220952426_0]
-  ./gtfs-tb-routing.py ... 8.39s user 0.07s system 99% cpu 8.474 total
+  ./gtfs-tb-routing.py gtfs-shizuoka -c gtfs-shizuoka.cache.pickle J22209723_0   8.39s user 0.06s system 99% cpu 8.454 total
 
   % time ./gtfs-tb-routing.py gtfs-shizuoka -c gtfs-shizuoka.cache.pickle J22209843_0 J222093345_0
   Journey set (1):
 
-    Journey 7f2c9befc058 (arrival: 07:41:00, trips: 1):
+    Journey 5555e3e3c020 (arrival: 07:41:00, trips: 2):
+      trip [129]:
+        from (dep at 07:02:00): 1:田代環境プラザ [J22209843_0]
+        to (arr at 07:26:00): 20:島田駅 北口１番のりば [J222093340_1]
+      footpath (time: 0:02:16):
+        from: 島田駅 北口１番のりば [J222093340_1]
+        to: 島田駅 北口２番のりば [J222093340_2]
       trip [7]:
         from (dep at 07:33:00): 38:島田駅 北口２番のりば [J222093340_2]
         to (arr at 07:41:00): 45:島田市民病院 [J222093345_0]
-  ./gtfs-tb-routing.py ... 0.83s user 0.05s system 99% cpu 0.883 total
+  ./gtfs-tb-routing.py ... 0.85s user 0.04s system 99% cpu 0.894 total
 
 Note that second query is much faster due to ``--cache gtfs-shizuoka.cache.pickle``
 option, which allows to reuse pre-calculated data from the first query.
