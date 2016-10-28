@@ -53,7 +53,7 @@ class Lines:
 
 	def lines_with_stop(self, stop):
 		'All lines going through stop as (stopidx, line) tuples.'
-		return self.idx_stop[stop]
+		return self.idx_stop.get(stop, list())
 
 	def line_for_trip(self, trip): return self.idx_trip[trip]
 

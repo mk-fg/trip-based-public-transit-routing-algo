@@ -62,6 +62,7 @@ class Footpaths:
 
 	def from_stops_to(self, stop): return self.set_idx[stop].items()
 	to_stops_from = from_stops_to
+	def between(self, stop_a, stop_b): return self.set_idx[stop_a][stop_b]
 
 	def time_delta(self, stop_from, stop_to): return self.set_idx[stop_from][stop_to]
 
