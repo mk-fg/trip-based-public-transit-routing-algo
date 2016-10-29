@@ -132,11 +132,11 @@ class TBRoutingEngine:
 				return True
 			return False
 
-		discarded_n, progress = 0, self.progress_iter('pre_reduction', len(timetable.trips))
+		discarded_count, progress = 0, self.progress_iter('pre_reduction', len(timetable.trips))
 		for trip_t in timetable.trips:
 			min_time_arr, min_time_ch = dict(), dict()
 			progress.send([ 'transfer set size: {:,},'
-				' discarded (so far): {:,}', len(transfers), discarded_n ])
+				' discarded (so far): {:,}', len(transfers), discarded_count ])
 
 			for i in range(len(trip_t)-1, 0, -1): # first stop is skipped here as well
 				ts_p, transfers_discard = trip_t[i], list()
@@ -162,9 +162,9 @@ class TBRoutingEngine:
 					if not keep: transfers_discard.append(transfer_id)
 
 				transfers.discard(transfers_discard)
-				discarded_n += len(transfers_discard)
+				discarded_count += len(transfers_discard)
 
-		self.log.debug('Discarded no-improvement transfers: {:,}', discarded_n)
+		self.log.debug('Discarded no-improvement transfers: {:,}', discarded_count)
 		return transfers
 
 
@@ -186,7 +186,6 @@ class TBRoutingEngine:
 		##  In original paper, first transfer to other TripSegment to be enqueue()'d
 		##   "wins" for all of the stops on it (by updating index R),
 		##    regardless of later-enqueue()'d segments with more optimal journeys.
-		# XXX: should be replaced by post-filter that'd pick later lines and min-footpaths
 		subqueue = list() # Sequence[TripTransferCheck]
 		def subqueue_flush():
 			'enqueue() all TripTransferCheck segments in a most-optimal-first order.'
