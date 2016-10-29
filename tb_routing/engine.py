@@ -171,8 +171,9 @@ class TBRoutingEngine:
 	@timer
 	def query_earliest_arrival(self, stop_src, stop_dst, dts_src):
 		'''Algorithm 4: Earliest arrival query.
-			Actually a bicriteria query that also finds
+			Actually a bicriteria query that finds
 				min-transfer journeys as well, just called that in the paper.'''
+		# XXX: special case of profile-query, so should be merged into that
 		timetable, lines, transfers = self.graph
 
 		TripTransferCheck = namedtuple('TTCheck', 'dt_fp trip stopidx n journey')
@@ -259,8 +260,68 @@ class TBRoutingEngine:
 
 
 	@timer
-	def query_profile(self, stop_src, stop_dst, dts_edt, dts_ldt):
+	def query_profile(self, stop_src, stop_dst, dts_edt, dts_ldt, max_transfers=15):
 		'''Profile query, returning a list of pareto-optimal JourneySet results with Journeys
 				from stop_src to stop_dst, with departure at stop_src in a day-time (dts) interval
 				from dts_edt (earliest departure time) to dts_ldt (latest).'''
-		raise NotImplementedError
+		timetable, lines, transfers = self.graph
+
+		DepartureCriteriaCheck = namedtuple('DCCheck', 'trip stopidx dts_src')
+		TripSegment = namedtuple('TripSeg', 'trip stopidx_a stopidx_b')
+
+		results = list()
+		R, Q = dict(), dict()
+
+		def enqueue(trip, i, n, _ss=t.public.SolutionStatus):
+			i_max = len(trip) - 1 # for the purposes of "infinity" here
+			if i >= R.get((n, trip), i_max): return
+			Q.setdefault(n, deque()).append(TripSegment(trip, i, R.get((n, trip), i_max)))
+			for trip_u in lines.line_for_trip(trip)\
+					.trips_by_relation(trip, _ss.non_dominated, _ss.equal):
+				i_min = min(i, R.get((n, trip_u), i_max))
+				for n in range(n, max_transfers): R[n, trip_u] = i_min
+
+		lines_to_dst = dict() # (i, line, dt) indexed by trip
+		for stop_q, dt_fp in timetable.footpaths.from_stops_to(stop_dst):
+			if stop_q is stop_dst: dt_fp = 0
+			for i, line in lines.lines_with_stop(stop_q):
+				for trip in line: lines_to_dst.setdefault(trip, list()).append((i, line, dt_fp))
+		for line_infos in lines_to_dst.values(): # so that all "i > b" come up first
+			line_infos.sort(reverse=True, key=op.itemgetter(0))
+
+		profile_queue = list()
+		for stop_q, dt_fp in timetable.footpaths.to_stops_from(stop_src):
+			if stop_q is stop_src: dt_fp = 0
+			# journey = t.public.Journey(dts_src) # XXX: Journey should include "dts" criteria
+			for i, line in lines.lines_with_stop(stop_q):
+				for trip in line:
+					dts_trip = trip[i].dts_dep
+					dts_min, dts_max = dts_trip + dt_fp, dts_trip - dt_fp
+					if not (dts_min >= dts_edt and dts_max <= dts_ldt): continue
+					profile_queue.append(DepartureCriteriaCheck(trip, i, dts_max))
+		profile_queue.sort(key=op.attrgetter('dts_src'), reverse=True) # latest-to-earliest
+
+		t_min_idx = dict()
+		for dts_src, checks in it.groupby(profile_queue, op.attrgetter('dts_src')):
+			n = 0
+			for trip, stopidx, dts_src in checks: enqueue(trip, stopidx, n)
+			while Q:
+				t_min = t_min_idx.get(n, u.inf)
+				for trip, b, e in Q.pop(n):
+					# Check if trip reaches stop_dst (or its footpath-vicinity) directly
+					for i_dst, line, dt_fp in lines_to_dst.get(trip, list()):
+						if i_dst <= b: break # can't reach previous stop
+						line_dts_dst = trip[i_dst].dts_arr + dt_fp
+						if line_dts_dst < t_min:
+							t_min_idx[n] = line_dts_dst
+							results.append((line_dts_dst, n))
+					# Check if trip can lead to nondominated journeys, and queue trips reachable from it
+					if trip[b+1].dts_arr < t_min:
+						for i in range(b+1, e+1): # b < i <= e
+							for k, (_, _, trip_u, j) in transfers.from_trip_stop(trip, i):
+								stop_i, stop_j = trip[i].stop, trip_u[j].stop
+								dt_fp = timetable.footpaths.time_delta(stop_i, stop_j)
+								enqueue(trip_u, j, n+1)
+				n += 1
+
+		return results
