@@ -175,7 +175,7 @@ class TBRoutingEngine:
 				min-transfer journeys as well, just called that in the paper.'''
 		timetable, lines, transfers = self.graph
 
-		TripTransferCheck = namedtuple('TTCheck', 'dt_fp stopidx trip n journey')
+		TripTransferCheck = namedtuple('TTCheck', 'dt_fp trip stopidx n journey')
 		TripSegment = namedtuple('TripSeg', 'trip stopidx_a stopidx_b journey')
 
 		journeys = t.public.JourneySet()
@@ -217,12 +217,14 @@ class TBRoutingEngine:
 			dts_q = dts_src + dt_fp
 			journey = t.public.Journey(dts_src)
 			journey.append_fp(stop_src, stop_q, dt_fp)
-			if stop_q is stop_dst: journeys.add(journey)
+			if stop_q is stop_dst:
+				journeys.add(journey)
+				continue # can't be beaten on time or transfers - can only be extended
 			for i, line in lines.lines_with_stop(stop_q):
 				## Note: "t ← earliest trip" is usually not desirable as a first trip.
 				##  I.e. you'd usually prefer to pick latest trip possible to min dep-to-arr time.
 				trip = line.earliest_trip(i, dts_q)
-				if trip: subqueue.append(TripTransferCheck(dt_fp, i, trip, 0, journey))
+				if trip: subqueue.append(TripTransferCheck(dt_fp, trip, i, 0, journey))
 		subqueue_flush()
 
 		# Main loop
@@ -248,7 +250,7 @@ class TBRoutingEngine:
 							stop_i, stop_j = trip[i].stop, trip_u[j].stop
 							dt_fp = timetable.footpaths.time_delta(stop_i, stop_j)
 							jn_u.append_fp(stop_i, stop_j, dt_fp)
-							subqueue.append(TripTransferCheck(dt_fp, j, trip_u, n+1, jn_u))
+							subqueue.append(TripTransferCheck(dt_fp, trip_u, j, n+1, jn_u))
 
 			subqueue_flush()
 			n += 1
