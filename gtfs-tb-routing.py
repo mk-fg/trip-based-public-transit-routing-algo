@@ -19,23 +19,29 @@ class Conf:
 log = tb.u.get_logger('gtfs-cli')
 
 
-def iter_gtfs_tuples(gtfs_dir, filename):
+def iter_gtfs_tuples(gtfs_dir, filename, empty_if_missing=False):
+	log.debug('Processing gtfs file: {}', filename)
 	if filename.endswith('.txt'): filename = filename[:-4]
 	tuple_t = ''.join(' '.join(filename.rstrip('s').split('_')).title().split())
-	with (gtfs_dir / '{}.txt'.format(filename)).open(encoding='utf-8-sig') as src:
+	p = gtfs_dir / '{}.txt'.format(filename)
+	if empty_if_missing and not os.access(str(p), os.R_OK): return
+	with p.open(encoding='utf-8-sig') as src:
 		src_csv = csv.reader(src)
-		tuple_t = namedtuple(tuple_t, list(v.strip() for v in next(src_csv)))
-		for line in src_csv: yield tuple_t(*line)
+		fields = list(v.strip() for v in next(src_csv))
+		tuple_t = namedtuple(tuple_t, fields)
+		for line in src_csv:
+			try: yield tuple_t(*line)
+			except TypeError:
+				log.debug('Skipping bogus CSV line (file: {}): {!r}', p, line)
 
 def parse_gtfs_dts(ts_str):
 	if ':' not in ts_str: return
 	return sum((mul * int(v)) for mul, v in zip([3600, 60, 1], ts_str.split(':')))
 
-def footpath_dt(stop_a, stop_b, dt_ch, dt_base, speed_kmh, math=math):
+def footpath_dt(stop_a, stop_b, dt_base, speed_kmh, math=math):
 	'''Calculate footpath time-delta (dt) between two stops,
 		based on their lon/lat distance (using Haversine Formula) and walking-speed constant.'''
 	# Alternative: use UTM coordinates and KDTree (e.g. scipy) or spatial dbs
-	if stop_a is stop_b: return dt_ch
 	lon1, lat1, lon2, lat2 = (
 		math.radians(float(v)) for v in
 		[stop_a.lon, stop_a.lat, stop_b.lon, stop_b.lat] )
@@ -46,14 +52,19 @@ def footpath_dt(stop_a, stop_b, dt_ch, dt_base, speed_kmh, math=math):
 
 def parse_gtfs_timetable(gtfs_dir, conf):
 	'Parse Timetable from GTFS data directory.'
+	# Stops/footpaths that don't belong to trips are discarded here
 	types = tb.t.public
 
-	stops_dict = dict() # only subset that is part of trips will be used
+	stops_dict, stops_sets, stops_stations = dict(), dict(), set()
 	for t in iter_gtfs_tuples(gtfs_dir, 'stops'):
-		stops_dict[t.stop_id] = types.Stop(
+		stop = stops_dict[t.stop_id] = types.Stop(
 			t.stop_id, t.stop_name, float(t.stop_lon), float(t.stop_lat) )
+		if int(t.location_type) != 1 and t.parent_station:
+			stops_stations.add(t.parent_station)
+			stops_sets[t.stop_id] = stops_sets.setdefault(t.parent_station, set())
+			stops_sets[t.stop_id].add(stop)
 
-	trip_stops = defaultdict(list) # only subset listed in trips.txt will be used
+	trip_stops = defaultdict(list)
 	for t in iter_gtfs_tuples(gtfs_dir, 'stop_times'): trip_stops[t.trip_id].append(t)
 
 	trips, stops = types.Trips(), types.Stops()
@@ -72,21 +83,47 @@ def parse_gtfs_timetable(gtfs_dir, conf):
 			trip.add(types.TripStop(trip, stopidx, stop, dts_arr, dts_dep))
 		if trip: trips.add(trip)
 
-	footpaths, fp_samestop_count = types.Footpaths(), 0
-	fp_dt = ft.partial( footpath_dt, dt_ch=conf.dt_ch,
-		dt_base=conf.footpath_dt_base, speed_kmh=conf.footpath_speed_kmh )
-	for stop_a, stop_b in it.combinations_with_replacement(list(stops), 2):
-		footpaths.add(stop_a, stop_b, fp_dt(stop_a, stop_b))
-		if stop_a is stop_b: fp_samestop_count += 1
-	footpaths.discard_longer(conf.footpath_dt_max)
+	footpaths, fp_samestop_count, fp_synth = types.Footpaths(), 0, False
+	get_stops_set = lambda stop_id: list(filter( stops.get,
+		stops_sets.get(stop_id) if stop_id in stops_stations else [stops_dict.get(stop_id)] ))
+	for t in it.chain.from_iterable(
+			iter_gtfs_tuples(gtfs_dir, name, empty_if_missing=True)
+			for name in ['transfers', 'links'] ):
+		stops_from, stops_to = map(get_stops_set, [t.from_stop_id, t.to_stop_id])
+		if not (stops_from and stops_to): continue
+		dt = tb.u.get_any(t._asdict(), 'min_transfer_time', 'link_secs')
+		if dt is None:
+			log.debug('Missing transfer time value in CSV tuple: {}', t)
+			continue
+		for stop_from, stop_to in it.product(stops_from, stops_to):
+			if stop_from is stop_to: fp_samestop_count += 1
+			footpaths.add(stop_from, stop_to, int(dt))
+	if not len(footpaths):
+		log.debug('No transfers/links data found, generating synthetic footpaths from lon/lat')
+		fp_synth, fp_dt = True, ft.partial( footpath_dt,
+			dt_base=conf.footpath_dt_base, speed_kmh=conf.footpath_speed_kmh )
+		for stop_a, stop_b in it.permutations(list(stops), 2):
+			footpaths.add(stop_a, stop_b, fp_dt(stop_a, stop_b))
+		footpaths.discard_longer(conf.footpath_dt_max)
+	if fp_samestop_count < len(stops) / 2:
+		if not fp_synth:
+			log.debug(
+				'Generating missing same-stop footpaths (dt_ch={}),'
+					' because source data seem to have very few of them - {} for {} stops',
+				conf.dt_ch, fp_samestop_count, len(stops) )
+		for stop in stops:
+			try: footpaths.between(stop, stop)
+			except KeyError:
+				footpaths.add(stop, stop, conf.dt_ch)
+				fp_samestop_count += 1
 
 	log.debug(
 		'Parsed timetable: stops={:,}, footpaths={:,}'
 			' (mean_dt={:,.1f}s, same-stop={:,}), trips={:,} (mean_stops={:,.1f})',
 		len(stops),
-		len(footpaths), footpaths.stat_mean_dt(), fp_samestop_count,
+		len(footpaths), footpaths.stat_mean_dt(), len(stops),
 		len(trips), trips.stat_mean_stops() )
-	return types.Timetable(conf.dt_ch, stops, footpaths, trips)
+	return types.Timetable(stops, footpaths, trips)
 
 
 def dts_parse(dts_str):
