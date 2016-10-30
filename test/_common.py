@@ -11,7 +11,7 @@ path_project = Path(__file__).parent.parent
 sys.path.insert(1, str(path_project))
 import tb_routing as tb
 gtfs_cli = type( 'FakeModule', (object,),
-	runpy.run_path(str(path_project / 'gtfs-tb-routing.py')) )
+	runpy.run_path(str(path_project / 'gtfs-tb-routing.py'), run_name='gtfs-tb-routing') )
 
 verbose = os.environ.get('TB_DEBUG')
 if verbose:
