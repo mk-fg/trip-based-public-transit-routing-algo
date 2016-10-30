@@ -55,14 +55,13 @@ def parse_gtfs_timetable(gtfs_dir, conf):
 	# Stops/footpaths that don't belong to trips are discarded here
 	types = tb.t.public
 
-	stops_dict, stops_sets, stops_stations = dict(), dict(), set()
+	stops_dict, stations = dict(), dict()
 	for t in iter_gtfs_tuples(gtfs_dir, 'stops'):
-		stop = stops_dict[t.stop_id] = types.Stop(
-			t.stop_id, t.stop_name, float(t.stop_lon), float(t.stop_lat) )
-		if int(t.location_type) != 1 and t.parent_station:
-			stops_stations.add(t.parent_station)
-			stops_sets[t.stop_id] = stops_sets.setdefault(t.parent_station, set())
-			stops_sets[t.stop_id].add(stop)
+		if not t.parent_station:
+			stations[t.stop_id] = types.Stop(
+				t.stop_id, t.stop_name, float(t.stop_lon), float(t.stop_lat) )
+		stops_dict[t.stop_id] = t.parent_station or t.stop_id
+	for k in stops_dict: stops_dict[k] = stations[stops_dict[k]]
 
 	trip_stops = defaultdict(list)
 	for t in iter_gtfs_tuples(gtfs_dir, 'stop_times'): trip_stops[t.trip_id].append(t)
@@ -84,20 +83,18 @@ def parse_gtfs_timetable(gtfs_dir, conf):
 		if trip: trips.add(trip)
 
 	footpaths, fp_samestop_count, fp_synth = types.Footpaths(), 0, False
-	get_stops_set = lambda stop_id: list(filter( stops.get,
-		stops_sets.get(stop_id) if stop_id in stops_stations else [stops_dict.get(stop_id)] ))
+	get_stop = lambda stop_id: stops.get(stops_dict.get(stop_id))
 	for t in it.chain.from_iterable(
 			iter_gtfs_tuples(gtfs_dir, name, empty_if_missing=True)
 			for name in ['transfers', 'links'] ):
-		stops_from, stops_to = map(get_stops_set, [t.from_stop_id, t.to_stop_id])
-		if not (stops_from and stops_to): continue
+		stop_from, stop_to = map(get_stop, [t.from_stop_id, t.to_stop_id])
+		if not (stop_from and stop_to): continue
 		dt = tb.u.get_any(t._asdict(), 'min_transfer_time', 'link_secs')
 		if dt is None:
 			log.debug('Missing transfer time value in CSV tuple: {}', t)
 			continue
-		for stop_from, stop_to in it.product(stops_from, stops_to):
-			if stop_from is stop_to: fp_samestop_count += 1
-			footpaths.add(stop_from, stop_to, int(dt))
+		if stop_from is stop_to: fp_samestop_count += 1
+		footpaths.add(stop_from, stop_to, int(dt))
 	if not len(footpaths):
 		log.debug('No transfers/links data found, generating synthetic footpaths from lon/lat')
 		fp_synth, fp_dt = True, ft.partial( footpath_dt,
