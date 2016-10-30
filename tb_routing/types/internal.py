@@ -58,6 +58,7 @@ class Lines:
 	def line_for_trip(self, trip): return self.idx_trip[trip]
 
 	def __iter__(self): return iter(self.idx_trip.values())
+	def __len__(self): return len(set(map(id, self.idx_trip.values())))
 
 
 @u.attr_struct

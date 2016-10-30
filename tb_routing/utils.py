@@ -22,17 +22,17 @@ get_logger = lambda name: LogStyleAdapter(logging.getLogger(name))
 
 
 def attr_struct(cls=None, vals_to_attrs=False, **kws):
-	if not cls: return ft.partial(attr_struct, **kws)
+	if not cls: return ft.partial(attr_struct, vals_to_attrs=vals_to_attrs, **kws)
 	try:
 		keys = cls.keys
 		del cls.keys
-	except AttributeError: pass
+	except AttributeError: keys = list()
 	else:
 		if isinstance(keys, str): keys = keys.split()
 		for k in keys: setattr(cls, k, attr.ib())
 	if vals_to_attrs:
-		for k, v in vars(cls):
-			if k in keys or callable(v): continue
+		for k, v in vars(cls).items():
+			if k.startswith('_') or k in keys or callable(v): continue
 			setattr(cls, k, attr.ib(v))
 	kws.setdefault('slots', True)
 	return attr.s(cls, **kws)

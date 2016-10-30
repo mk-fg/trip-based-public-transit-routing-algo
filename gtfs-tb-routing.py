@@ -118,7 +118,7 @@ def parse_gtfs_timetable(gtfs_dir, conf):
 		'Parsed timetable: stops={:,}, footpaths={:,}'
 			' (mean_dt={:,.1f}s, same-stop={:,}), trips={:,} (mean_stops={:,.1f})',
 		len(stops),
-		len(footpaths), footpaths.stat_mean_dt(), len(stops),
+		len(footpaths), footpaths.stat_mean_dt(), fp_samestop_count,
 		len(trips), trips.stat_mean_stops() )
 	return types.Timetable(stops, footpaths, trips)
 
@@ -138,11 +138,13 @@ def calc_timer(func, *args, log=tb.u.get_logger('timer'), **kws):
 	log.debug('[{}] Finished in: {:.1f}s', func_id, td)
 	return data
 
-def init_gtfs_router(gtfs_dir, cache_path=None, conf=None, timer_func=None):
+def init_gtfs_router( gtfs_dir, cache_path=None,
+		conf=None, conf_engine=None, timer_func=None ):
 	if not conf: conf = Conf()
 	timetable_func = parse_gtfs_timetable\
 		if not timer_func else ft.partial(timer_func, parse_gtfs_timetable)
-	router_factory = ft.partial(tb.engine.TBRoutingEngine, timer_func=timer_func)
+	router_factory = ft.partial(
+		tb.engine.TBRoutingEngine, conf=conf_engine, timer_func=timer_func )
 	graph = tb.u.pickle_load(cache_path) if cache_path else None
 	if not graph:
 		timetable = timetable_func(Path(gtfs_dir), conf)
@@ -178,7 +180,10 @@ def main(args=None):
 		level=tb.u.logging.DEBUG if opts.debug else tb.u.logging.WARNING )
 
 	dts_start = dts_parse(opts.day_time)
-	timetable, router = init_gtfs_router(opts.gtfs_dir, opts.cache, timer_func=calc_timer)
+	conf_engine = tb.engine.EngineConf(
+		log_progress_for={'lines', 'pre_initial_set', 'pre_reduction'} )
+	timetable, router = init_gtfs_router( opts.gtfs_dir,
+		opts.cache, conf_engine=conf_engine, timer_func=calc_timer )
 
 	a, b = timetable.stops[opts.stop_from], timetable.stops[opts.stop_to]
 	journeys = router.query_earliest_arrival(a, b, dts_start)

@@ -4,13 +4,19 @@ from collections import defaultdict, namedtuple, deque
 from . import utils as u, types as t
 
 
+@u.attr_struct(vals_to_attrs=True)
+class EngineConf:
+	log_progress_for = None # or a set/list of prefixes
+	log_progress_steps = 30
+
+
 class TBRoutingEngine:
 
 	graph = None
 
-	def __init__(self, timetable=None, cached_graph=None, timer_func=None):
+	def __init__(self, timetable=None, conf=None, cached_graph=None, timer_func=None):
 		'''Creates Trip-Based Routing Engine from Timetable data.'''
-		self.log = u.get_logger('tb')
+		self.conf, self.log = conf or EngineConf(), u.get_logger('tb')
 		self.timer_wrapper = timer_func if timer_func else lambda f,*a,**k: func(*a,**k)
 
 		graph = cached_graph
@@ -27,8 +33,12 @@ class TBRoutingEngine:
 		return self_or_func.timer_wrapper(func, *args, **kws)
 
 	@u.coroutine
-	def progress_iter(self, prefix, n_max, steps=30, n=0):
+	def progress_iter(self, prefix, n_max, steps=None, n=0):
 		'Progress logging helper coroutine for long calculations.'
+		prefix_set = self.conf.log_progress_for
+		if not prefix_set or prefix not in prefix_set:
+			while True: yield # dry-run
+		if not steps: steps = self.conf.log_progress_steps
 		steps = min(n_max, steps)
 		step_n = steps and n_max / steps
 		msg_tpl = '[{{}}] Step {{:>{0}.0f}} / {{:{0}d}}{{}}'.format(len(str(steps)))
@@ -53,8 +63,9 @@ class TBRoutingEngine:
 		line_stops = lambda trip: tuple(map(op.attrgetter('stop'), trip))
 		for trip in timetable.trips: line_trips[line_stops(trip)].append(trip)
 
-		lines = t.internal.Lines()
+		lines, progress = t.internal.Lines(), self.progress_iter('lines', len(line_trips))
 		for trips in line_trips.values():
+			progress.send(['line-count={:,}', len(lines)])
 			lines_for_stopseq = list()
 
 			# Split same-stops trips into non-overtaking groups
@@ -89,7 +100,9 @@ class TBRoutingEngine:
 		'Algorithm 1: Initial transfer computation.'
 		transfers = t.internal.TransferSet()
 
-		for trip_t in timetable.trips:
+		progress = self.progress_iter('pre_initial_set', len(timetable.trips))
+		for n, trip_t in enumerate(timetable.trips):
+			progress.send(['transfer-set-size={:,} processed-trips={:,}', len(transfers), n])
 			for i, ts_p in enumerate(trip_t):
 				if i == 0: continue # "do not add any transfers from the first stop ..."
 
@@ -136,8 +149,7 @@ class TBRoutingEngine:
 		discarded_count, progress = 0, self.progress_iter('pre_reduction', len(timetable.trips))
 		for trip_t in timetable.trips:
 			min_time_arr, min_time_ch = dict(), dict()
-			progress.send([ 'transfer set size: {:,},'
-				' discarded (so far): {:,}', len(transfers), discarded_count ])
+			progress.send(['transfer-set-size={:,} discarded={:,}', len(transfers), discarded_count])
 
 			for i in range(len(trip_t)-1, 0, -1): # first stop is skipped here as well
 				ts_p, transfers_discard = trip_t[i], list()
