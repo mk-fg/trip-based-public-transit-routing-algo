@@ -50,6 +50,11 @@ def coroutine(func):
 		return cr
 	return cr_wrapper
 
+def get_any(d, *keys):
+	for k in keys:
+		try: return d[k]
+		except KeyError: pass
+
 inf = float('inf')
 
 

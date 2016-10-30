@@ -26,10 +26,17 @@ class Stop:
 
 class Stops:
 	def __init__(self): self.set_idx = dict()
+
 	def add(self, stop):
 		if stop.id in self.set_idx: stop = self.set_idx[stop.id]
 		else: self.set_idx[stop.id] = stop
 		return stop
+
+	def get(self, stop):
+		if isinstance(stop, Stop): stop = stop.id
+		if stop not in self.set_idx: return
+		return self.set_idx[stop]
+
 	def __getitem__(self, stop_id): return self.set_idx[stop_id]
 	def __len__(self): return len(self.set_idx)
 	def __iter__(self): return iter(self.set_idx.values())
@@ -37,40 +44,52 @@ class Stops:
 
 class Footpaths:
 
-	# XXX: these are currently bi-directional
-	# Which is why to_stops_from == from_stops_to and
-	#  "k1.id > k2.id" filter in stat_mean_dt gets "unique footpaths".
-
-	def __init__(self): self.set_idx = defaultdict(dict)
+	def __init__(self):
+		self.set_idx_to, self.set_idx_from = dict(), dict()
 
 	def add(self, stop_a, stop_b, dt):
-		self.set_idx[stop_a][stop_b] = dt
-		self.set_idx[stop_b][stop_a] = dt
+		self.set_idx_to.setdefault(stop_a, dict())[stop_b] = dt
+		self.set_idx_from.setdefault(stop_b, dict())[stop_a] = dt
+		self._stats_cache = None
 
 	def discard_longer(self, dt_max):
 		items = list(sorted( (v,(k1,k2))
-			for k1,v1 in self.set_idx.items() for k2,v in v1.items() ))
+			for k1,v1 in self.set_idx_to.items() for k2,v in v1.items() ))
 		n = bisect.bisect_left(items, (dt_max, ()))
 		for v,(k1,k2) in items[n:]:
-			del self.set_idx[k1][k2]
-			if not self.set_idx[k1]: del self.set_idx[k1]
+			try:
+				del self.set_idx_to[k1][k2]
+				if not self.set_idx_to[k1]: del self.set_idx_from[k2]
+			except KeyError: pass
+			try:
+				del self.set_idx_from[k2][k1]
+				if not self.set_idx_from[k2]: del self.set_idx_from[k1]
+			except KeyError: pass
+		self._stats_cache = None
+
+	def to_stops_from(self, stop): return self.set_idx_to[stop].items()
+	def from_stops_to(self, stop): return self.set_idx_from[stop].items()
+	def time_delta(self, stop_from, stop_to): return self.set_idx_to[stop_from][stop_to]
+
+	def between(self, stop_a, stop_b):
+		'Return footpath dt in any direction between two stops.'
+		try: return self.set_idx_to[stop_a][stop_b]
+		except KeyError: return self.set_idx_to[stop_b][stop_a]
+
+	_stats_cache = None
+	def _stats(self):
+		if not self._stats_cache:
+			dt_sum = dt_count = 0
+			for k1,v1 in self.set_idx_to.items():
+				for k2,v in v1.items(): dt_sum, dt_count = dt_sum + v, dt_count + 1
+			self._stats_cache = dt_sum, dt_count
+		return self._stats_cache
 
 	def stat_mean_dt(self):
-		unique_dt_set = list( v for k1,v1 in
-			self.set_idx.items() for k2,v in v1.items() if k1.id > k2.id )
-		return sum(unique_dt_set) / len(unique_dt_set)
+		dt_sum, dt_count = self._stats()
+		return dt_sum / dt_count
 
-	def from_stops_to(self, stop): return self.set_idx[stop].items()
-	to_stops_from = from_stops_to
-	def between(self, stop_a, stop_b): return self.set_idx[stop_a][stop_b]
-
-	def time_delta(self, stop_from, stop_to): return self.set_idx[stop_from][stop_to]
-
-	def __len__(self):
-		return len(set(
-			tuple(sorted([a.id, b.id]))
-			for a, a_map in self.set_idx.items()
-			for b, dt in a_map.items() ))
+	def __len__(self): return self._stats()[1]
 
 
 trip_stop_daytime = lambda dts: dts % (24 * 3600)
@@ -116,7 +135,7 @@ class Trips(UserList):
 
 
 @u.attr_struct
-class Timetable: keys = 'dt_ch stops footpaths trips'
+class Timetable: keys = 'stops footpaths trips'
 
 
 

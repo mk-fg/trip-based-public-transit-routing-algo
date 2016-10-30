@@ -25,7 +25,7 @@ class SimpleTestCase(unittest.TestCase):
 
 		tt = self.test_data.timetable or dict()
 		if not set(tt.keys()).difference(['trips', 'footpaths']):
-			tt_trips, tt_footpaths = (tt.get(k) for k in ['trips', 'footpaths'])
+			tt_trips, tt_footpaths = (tt.get(k, list()) for k in ['trips', 'footpaths'])
 		else: tt_trips, tt_footpaths = self.test_data.timetable, list()
 
 		for trip_id, trip_data in tt_trips.items():
@@ -45,7 +45,7 @@ class SimpleTestCase(unittest.TestCase):
 			footpaths.add(src, dst, dt * 60)
 		for stop in stops: footpaths.add(stop, stop, self.dt_ch)
 
-		timetable = types.Timetable(self.dt_ch, stops, footpaths, trips)
+		timetable = types.Timetable(stops, footpaths, trips)
 		router = c.tb.engine.TBRoutingEngine(timetable, timer_func=c.gtfs_cli.calc_timer)
 		checks = c.GraphAssertions(router.graph)
 		return timetable, router, checks
