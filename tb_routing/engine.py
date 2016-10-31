@@ -116,7 +116,7 @@ class TBRoutingEngine:
 							line is not lines.line_for_trip(trip_t)
 							or trip_u.compare(trip_t) is t.public.SolutionStatus.non_dominated
 							or j < i ): continue
-						transfers.add(t.internal.Transfer(trip_t, i, trip_u, j))
+						transfers.add(t.internal.Transfer(trip_t[i], trip_u[j], dt_fp))
 
 		self.log.debug('Initial transfer set size: {:,}', len(transfers))
 		return transfers
@@ -124,16 +124,19 @@ class TBRoutingEngine:
 	@timer
 	def _pre_remove_u_turns(self, transfers, footpaths):
 		'Algorithm 2: Remove U-turn transfers.'
-		transfers_discard = list()
-		for k, (trip_t, i, trip_u, j) in transfers:
-			try: ts_t, ts_u = trip_t[i-1], trip_u[j+1]
-			except IndexError: continue
+		discard_count = 0
+		for transfer in transfers:
+			try:
+				ts_t = transfer.ts_from.trip[transfer.ts_from.stopidx-1]
+				ts_u = transfer.ts_to.trip[transfer.ts_to.stopidx+1]
+			except IndexError: continue # transfers from-start/to-end of t/u trips
 			if ts_t.stop is ts_u.stop:
 				try: dt_ch = footpaths.time_delta(ts_t.stop, ts_t.stop)
 				except KeyError: continue
-				if ts_t.dts_arr + dt_ch <= ts_u.dts_dep: transfers_discard.append(k)
-		transfers.discard(transfers_discard)
-		self.log.debug('Discarded U-turns: {:,}', len(transfers_discard))
+				if ts_t.dts_arr + dt_ch <= ts_u.dts_dep:
+					del transfers[transfer]
+					discard_count += 1
+		self.log.debug('Discarded U-turns: {:,}', discard_count)
 		return transfers
 
 	@timer
@@ -146,38 +149,34 @@ class TBRoutingEngine:
 				return True
 			return False
 
-		discarded_count, progress = 0, self.progress_iter('pre_reduction', len(timetable.trips))
+		discard_count, progress = 0, self.progress_iter('pre_reduction', len(timetable.trips))
 		for trip_t in timetable.trips:
 			min_time_arr, min_time_ch = dict(), dict()
-			progress.send(['transfer-set-size={:,} discarded={:,}', len(transfers), discarded_count])
+			progress.send(['transfer-set-size={:,} discarded={:,}', len(transfers), discard_count])
 
 			for i in range(len(trip_t)-1, 0, -1): # first stop is skipped here as well
-				ts_p, transfers_discard = trip_t[i], list()
+				ts_p = trip_t[i]
 				update_min_time(min_time_arr, ts_p.stop, ts_p.dts_arr)
-
 				for stop_q, dt_fp in timetable.footpaths.to_stops_from(ts_p.stop):
 					dts_q = ts_p.dts_arr + dt_fp
 					update_min_time(min_time_arr, stop_q, dts_q)
 					update_min_time(min_time_ch, stop_q, dts_q)
 
-				for transfer_id, (_, _, trip_u, j) in transfers.from_trip_stop(trip_t, i):
+				for transfer in transfers.from_trip_stop(ts_p):
+					trip_u, j = transfer.ts_to.trip, transfer.ts_to.stopidx
 					keep = False
-
 					for k in range(j+1, len(trip_u)):
 						ts_u = trip_u[k]
 						keep = keep | update_min_time(min_time_arr, ts_u.stop, ts_u.dts_arr)
-
 						for stop_q, dt_fp in timetable.footpaths.to_stops_from(ts_u.stop):
 							dts_q = ts_u.dts_arr + dt_fp
 							keep = keep | update_min_time(min_time_arr, stop_q, dts_q)
 							keep = keep | update_min_time(min_time_ch, stop_q, dts_q)
+					if not keep:
+						del transfers[transfer]
+						discard_count += 1
 
-					if not keep: transfers_discard.append(transfer_id)
-
-				transfers.discard(transfers_discard)
-				discarded_count += len(transfers_discard)
-
-		self.log.debug('Discarded no-improvement transfers: {:,}', discarded_count)
+		self.log.debug('Discarded no-improvement transfers: {:,}', discard_count)
 		return transfers
 
 
@@ -186,14 +185,14 @@ class TBRoutingEngine:
 		'''Algorithm 4: Earliest arrival query.
 			Actually a bicriteria query that finds
 				min-transfer journeys as well, just called that in the paper.'''
-		# XXX: special case of profile-query, so should be merged into that
+		# XXX: special case of profile-query, should be merged into that
 		timetable, lines, transfers = self.graph
 
 		TripTransferCheck = namedtuple('TTCheck', 'dt_fp trip stopidx n journey')
 		TripSegment = namedtuple('TripSeg', 'trip stopidx_a stopidx_b journey')
 
 		journeys = t.public.JourneySet()
-		R, Q = dict(), dict() # XXX: should be returned/preserved for profile queries
+		R, Q = dict(), dict()
 
 		## Note: this sub-queue is used fix original algo's quirk where
 		##   additional unnecessary footpaths are not factored into optimality.
@@ -204,8 +203,7 @@ class TBRoutingEngine:
 		def subqueue_flush():
 			'enqueue() all TripTransferCheck segments in a most-optimal-first order.'
 			subqueue.sort(key=op.attrgetter('dt_fp', 'stopidx', 'trip.id'))
-			for tt_chk in subqueue:
-				enqueue(tt_chk.trip, tt_chk.stopidx, tt_chk.n, tt_chk.journey)
+			for tt_chk in subqueue: enqueue(tt_chk.trip, tt_chk.stopidx, tt_chk.n, tt_chk.journey)
 			subqueue.clear()
 
 		def enqueue(trip, i, n, journey, _ss=t.public.SolutionStatus):
@@ -259,12 +257,13 @@ class TBRoutingEngine:
 				# Check if trip can lead to nondominated journeys, and queue trips reachable from it
 				if trip[b+1].dts_arr < t_min:
 					for i in range(b+1, e+1): # b < i <= e
-						for k, (_, _, trip_u, j) in transfers.from_trip_stop(trip, i):
+						for transfer in transfers.from_trip_stop(trip[i]):
+							ts_u = transfer.ts_to
 							jn_u = journey.copy().append_trip(trip[b], trip[i])
-							stop_i, stop_j = trip[i].stop, trip_u[j].stop
+							stop_i, stop_j = trip[i].stop, ts_u.stop
 							dt_fp = timetable.footpaths.time_delta(stop_i, stop_j)
 							jn_u.append_fp(stop_i, stop_j, dt_fp)
-							subqueue.append(TripTransferCheck(dt_fp, trip_u, j, n+1, jn_u))
+							subqueue.append(TripTransferCheck(dt_fp, ts_u.trip, ts_u.stopidx, n+1, jn_u))
 
 			subqueue_flush()
 			n += 1

@@ -62,8 +62,8 @@ testMultipleRoutes:
     earliest:
       stats: ['10:15', '11:40']
       segments:
-        trip-A: [trip, A, D]
-        trip-B: [trip, D, E]
+        trip-A: [trip, A, C]
+        trip-B: [trip, C, E]
     least-hops:
       stats: ['10:15', '11:50']
       segments:

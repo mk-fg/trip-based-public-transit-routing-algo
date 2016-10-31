@@ -289,9 +289,11 @@ class GraphAssertions:
 						math.cos(lat1) * math.cos(lat2) * math.sin((lon2 - lon1)/2)**2 ))
 
 				if km <= max_km:
+					try: dt = graph.timetable.footpaths.between(ts1.stop, ts2.stop)
+					except KeyError: dt = -1
 					print(
-						'X-{}: {:.4f} {:.4f}\n  walk: {:,.1f}m\n  Y-{}: {:.4f} {:.4f}'.format(
-						n1, ts1.stop.lon, ts1.stop.lat, km * 1000, n2, ts2.stop.lon, ts2.stop.lat ))
+						'X-{}: {:.4f} {:.4f}\n  walk: {:,.1f}m, dt={:,.0f}s\n  Y-{}: {:.4f} {:.4f}'.format(
+						n1, ts1.stop.lon, ts1.stop.lat, km * 1000, dt, n2, ts2.stop.lon, ts2.stop.lat ))
 					for trip1, trip2 in it.product(line1, line2):
 						ts1, ts2 = trip1[n1], trip2[n2]
 						td = ts2.dts_dep - ts1.dts_arr
@@ -334,8 +336,8 @@ class GraphAssertions:
 						for trip in line:
 							for ts in ts_transfer_chk:
 								if not (ts.trip.id == trip.id and ts.stop is a):
-									for k, (_, _, t2, n2) in graph.transfers.from_trip_stop(ts.trip, ts.stopidx):
-										if t2[n2].stop is trip[n].stop: break
+									for transfer in graph.transfers.from_trip_stop(ts):
+										if transfer.ts_to.stop is trip[n].stop: break
 									else: continue
 								ts_transfer_found = True
 								ts_transfer_chk.clear()

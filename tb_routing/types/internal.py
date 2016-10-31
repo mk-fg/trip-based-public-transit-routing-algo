@@ -63,33 +63,42 @@ class Lines:
 
 @u.attr_struct
 class Transfer:
-	keys = 'trip_from stopidx_from trip_to stopidx_to'
+	ts_from = u.attr_init()
+	ts_to = u.attr_init()
+	dt = u.attr_init(0) # used for min-footpath ordering
+	id = u.attr_init(lambda seq=iter(range(2**40)): next(seq))
 	def __iter__(self): return iter(u.attr.astuple(self, recurse=False))
 
 class TransferSet:
 
-	def __init__(self): self.set_idx = dict()
+	def __init__(self): self.set_idx, self.set_idx_keys = dict(), dict()
 
 	def add(self, transfer):
 		# Second mapping is used purely for more efficient O(1) removals
-		k1 = transfer.trip_from, transfer.stopidx_from
+		k1 = transfer.ts_from.trip.id, transfer.ts_from.stopidx
 		if k1 not in self.set_idx: self.set_idx[k1] = dict()
 		k2 = len(self.set_idx[k1])
 		self.set_idx[k1][k2] = transfer
+		self.set_idx_keys[transfer.id] = k1, k2
 
-	def discard(self, keys):
-		for k1, k2 in keys:
-			del self.set_idx[k1][k2]
-			if not self.set_idx[k1]: del self.set_idx[k1]
+	def from_trip_stop( self, trip_stop,
+			# Complex key is to provide deterministic sorting, only "dt" matters here otherwise
+			_sort_key=op.attrgetter('dt', 'ts_from.stopidx',
+				'ts_to.stopidx', 'ts_from.trip.id', 'ts_to.trip.id') ):
+		'Return tuples of (transfer_id, transfer) from trip_stop, in min-footpath-time order.'
+		k1 = trip_stop.trip.id, trip_stop.stopidx
+		return sorted(self.set_idx.get(k1, dict()).values(), key=_sort_key)
 
-	def from_trip_stop(self, trip, stopidx):
-		k1 = trip, stopidx
-		for k2, transfer in self.set_idx.get(k1, dict()).items(): yield (k1, k2), transfer
+	def __getitem__(self, transfer):
+		k1, k2 = self.set_idx_keys[transfer.id]
+		return self.set_idx[k1][k2]
+	def __delitem__(self, transfer):
+		k1, k2 = self.set_idx_keys[transfer.id]
+		return self.set_idx[k1][k2]
 
-	def __len__(self): return sum(map(len, self.set_idx.values()))
+	def __len__(self): return len(self.set_idx_keys)
 	def __iter__(self):
-		for k1, sub_idx in self.set_idx.items():
-			for k2, transfer in sub_idx.items(): yield (k1, k2), transfer
+		for k1, k2 in self.set_idx_keys.values(): yield self.set_idx[k1][k2]
 
 
 @u.attr_struct

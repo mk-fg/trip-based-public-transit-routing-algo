@@ -42,6 +42,11 @@ def attr_init(factory_or_default=attr.NOTHING, **attr_kws):
 	return attr.ib(default=factory_or_default, **attr_kws)
 
 
+def die(code=0):
+	sys.stdout.close()
+	sys.stderr.close()
+	os._exit(code)
+
 def coroutine(func):
 	@ft.wraps(func)
 	def cr_wrapper(*args, **kws):
