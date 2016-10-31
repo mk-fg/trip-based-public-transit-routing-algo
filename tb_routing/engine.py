@@ -278,10 +278,18 @@ class TBRoutingEngine:
 		timetable, lines, transfers = self.graph
 
 		DepartureCriteriaCheck = namedtuple('DCCheck', 'trip stopidx dts_src journey')
+		TripTransferCheck = namedtuple('TTCheck', 'dt_fp trip stopidx n journey')
 		TripSegment = namedtuple('TripSeg', 'trip stopidx_a stopidx_b journey')
 
 		journeys = t.public.JourneySet()
 		R, Q = dict(), dict()
+
+		subqueue = list() # Sequence[TripTransferCheck]
+		def subqueue_flush():
+			'enqueue() all TripTransferCheck segments in a most-optimal-first order.'
+			subqueue.sort(key=op.attrgetter('dt_fp', 'stopidx', 'trip.id'))
+			for tt_chk in subqueue: enqueue(tt_chk.trip, tt_chk.stopidx, tt_chk.n, tt_chk.journey)
+			subqueue.clear()
 
 		def enqueue(trip, i, n, journey, _ss=t.public.SolutionStatus):
 			i_max = len(trip) - 1 # for the purposes of "infinity" here
@@ -318,7 +326,11 @@ class TBRoutingEngine:
 		t_min_idx = dict()
 		for dts_src, checks in it.groupby(profile_queue, op.attrgetter('dts_src')):
 			n = 0
-			for trip, stopidx, dts_src, journey in checks: enqueue(trip, stopidx, n, journey)
+
+			for trip, stopidx, dts_src, journey in checks:
+				subqueue.append(TripTransferCheck(dt_fp, trip, stopidx, n, journey))
+			subqueue_flush()
+
 			while Q and n < max_transfers:
 				t_min = t_min_idx.get(n, u.inf)
 				for trip, b, e, journey in Q.pop(n):
@@ -341,8 +353,9 @@ class TBRoutingEngine:
 								jn_u = journey.copy().append_trip(trip[b], trip[i])
 								stop_i, stop_j = trip[i].stop, ts_u.stop
 								jn_u.append_fp(stop_i, stop_j, dt_fp)
-								enqueue(ts_u.trip, ts_u.stopidx, n+1, jn_u)
+								subqueue.append(TripTransferCheck(dt_fp, ts_u.trip, ts_u.stopidx, n+1, jn_u))
 
+				subqueue_flush()
 				n += 1
 			Q.clear()
 
