@@ -10,8 +10,11 @@ import tb_routing as tb
 
 @tb.u.attr_struct(vals_to_attrs=True)
 class Conf:
-	dt_ch = 2*60 # fixed time-delta overhead for changing trips (i.e. p->p footpaths)
+	group_stops_into_stations = False # use "parent_station" to group all stops into one under its id
 	stop_linger_time_default = 5*60 # used if departure-time is missing
+
+	# Options for footpath-generation - not used if transfers.txt is non-empty
+	dt_ch = 2*60 # fixed time-delta overhead for changing trips (i.e. p->p footpaths)
 	footpath_dt_base = 2*60 # footpath_dt = dt_base + km / speed_kmh
 	footpath_speed_kmh = 5 / 3600
 	footpath_dt_max = 7*60 # all footpaths longer than that are discarded as invalid
@@ -55,13 +58,21 @@ def parse_gtfs_timetable(gtfs_dir, conf):
 	# Stops/footpaths that don't belong to trips are discarded here
 	types = tb.t.public
 
-	stops_dict, stations = dict(), dict()
+	stop_dict, stop_sets = dict(), dict() # {id: stop}, {id: station_stops}
 	for t in iter_gtfs_tuples(gtfs_dir, 'stops'):
-		if not t.parent_station:
-			stations[t.stop_id] = types.Stop(
-				t.stop_id, t.stop_name, float(t.stop_lon), float(t.stop_lat) )
-		stops_dict[t.stop_id] = t.parent_station or t.stop_id
-	for k in stops_dict: stops_dict[k] = stations[stops_dict[k]]
+		stop = types.Stop(t.stop_id, t.stop_name, float(t.stop_lon), float(t.stop_lat))
+		stop_set_id = t.parent_station or t.stop_id
+		stop_dict[t.stop_id] = stop_set_id, stop
+		if not t.parent_station: stop_sets[t.stop_id] = {stop}
+		else:
+			stop_sets[t.stop_id] = stop_sets.setdefault(stop_set_id, set())
+			stop_sets[stop_set_id].add(stop)
+	if conf.group_stops_into_stations:
+		for stop_id in stop_dict: # resolve all stops to stations
+			stop_dict[stop_id] = stop_dict[stop_dict[stop_id][0]]
+	stop_dict, stop_sets = (
+		dict((k, stop) for k, (k_set, stop) in stop_dict.items()),
+		dict((k, stop_sets[k_set]) for k, (k_set, stop) in stop_dict.items()) )
 
 	trip_stops = defaultdict(list)
 	for t in iter_gtfs_tuples(gtfs_dir, 'stop_times'): trip_stops[t.trip_id].append(t)
@@ -78,23 +89,24 @@ def parse_gtfs_timetable(gtfs_dir, conf):
 					else: continue
 				else: dts_arr = trip[-1].dts_dep # "scheduled based on the nearest preceding timed stop"
 			if not dts_dep: dts_dep = dts_arr + conf.stop_linger_time_default
-			stop = stops.add(stops_dict[ts.stop_id])
+			stop = stops.add(stop_dict[ts.stop_id])
 			trip.add(types.TripStop(trip, stopidx, stop, dts_arr, dts_dep))
 		if trip: trips.add(trip)
 
 	footpaths, fp_samestop_count, fp_synth = types.Footpaths(), 0, False
-	get_stop = lambda stop_id: stops.get(stops_dict.get(stop_id))
+	get_stop_set = lambda stop_id: list(filter(stops.get, stop_sets.get(stop_id)))
 	for t in it.chain.from_iterable(
 			iter_gtfs_tuples(gtfs_dir, name, empty_if_missing=True)
 			for name in ['transfers', 'links'] ):
-		stop_from, stop_to = map(get_stop, [t.from_stop_id, t.to_stop_id])
-		if not (stop_from and stop_to): continue
+		stops_from, stops_to = map(get_stop_set, [t.from_stop_id, t.to_stop_id])
+		if not (stops_from and stops_to): continue
 		dt = tb.u.get_any(t._asdict(), 'min_transfer_time', 'link_secs')
 		if dt is None:
 			log.debug('Missing transfer time value in CSV tuple: {}', t)
 			continue
-		if stop_from is stop_to: fp_samestop_count += 1
-		footpaths.add(stop_from, stop_to, int(dt))
+		for stop_from, stop_to in it.product(stops_from, stops_to):
+			if stop_from is stop_to: fp_samestop_count += 1
+			footpaths.add(stop_from, stop_to, int(dt))
 	if not len(footpaths):
 		log.debug('No transfers/links data found, generating synthetic footpaths from lon/lat')
 		fp_synth, fp_dt = True, ft.partial( footpath_dt,
