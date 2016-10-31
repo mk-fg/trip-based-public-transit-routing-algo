@@ -258,10 +258,9 @@ class TBRoutingEngine:
 				if trip[b+1].dts_arr < t_min:
 					for i in range(b+1, e+1): # b < i <= e
 						for transfer in transfers.from_trip_stop(trip[i]):
-							ts_u = transfer.ts_to
+							ts_u, dt_fp = transfer.ts_to, transfer.dt
 							jn_u = journey.copy().append_trip(trip[b], trip[i])
 							stop_i, stop_j = trip[i].stop, ts_u.stop
-							dt_fp = timetable.footpaths.time_delta(stop_i, stop_j)
 							jn_u.append_fp(stop_i, stop_j, dt_fp)
 							subqueue.append(TripTransferCheck(dt_fp, ts_u.trip, ts_u.stopidx, n+1, jn_u))
 
@@ -317,7 +316,7 @@ class TBRoutingEngine:
 		for dts_src, checks in it.groupby(profile_queue, op.attrgetter('dts_src')):
 			n = 0
 			for trip, stopidx, dts_src in checks: enqueue(trip, stopidx, n)
-			while Q:
+			while Q and n < max_transfers:
 				t_min = t_min_idx.get(n, u.inf)
 				for trip, b, e in Q.pop(n):
 					# Check if trip reaches stop_dst (or its footpath-vicinity) directly
@@ -330,10 +329,11 @@ class TBRoutingEngine:
 					# Check if trip can lead to nondominated journeys, and queue trips reachable from it
 					if trip[b+1].dts_arr < t_min:
 						for i in range(b+1, e+1): # b < i <= e
-							for k, (_, _, trip_u, j) in transfers.from_trip_stop(trip, i):
-								stop_i, stop_j = trip[i].stop, trip_u[j].stop
-								dt_fp = timetable.footpaths.time_delta(stop_i, stop_j)
-								enqueue(trip_u, j, n+1)
+							for transfer in transfers.from_trip_stop(trip[i]):
+								ts_u, dt_fp = transfer.ts_to, transfer.dt
+								stop_i, stop_j = trip[i].stop, ts_u.stop
+								enqueue(ts_u.trip, ts_u.stopidx, n+1)
 				n += 1
+			Q.clear()
 
 		return results
