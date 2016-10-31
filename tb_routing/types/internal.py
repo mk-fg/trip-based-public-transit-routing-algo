@@ -89,13 +89,12 @@ class TransferSet:
 		k1 = trip_stop.trip.id, trip_stop.stopidx
 		return sorted(self.set_idx.get(k1, dict()).values(), key=_sort_key)
 
-	def __getitem__(self, transfer):
+	def __contains__(self, transfer):
 		k1, k2 = self.set_idx_keys[transfer.id]
-		return self.set_idx[k1][k2]
+		return bool(self.set_idx.get(k1, dict()).get(k2))
 	def __delitem__(self, transfer):
 		k1, k2 = self.set_idx_keys[transfer.id]
 		return self.set_idx[k1][k2]
-
 	def __len__(self): return len(self.set_idx_keys)
 	def __iter__(self):
 		for k1, k2 in self.set_idx_keys.values(): yield self.set_idx[k1][k2]
