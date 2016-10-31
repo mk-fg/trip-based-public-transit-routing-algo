@@ -131,11 +131,37 @@ Notes
 Some less obvious things are described in this section.
 
 
+Journey Optimality Criterias
+````````````````````````````
+
+Trip-Based algorithm, as described in the `arXiv:1504.07149v2`_ paper optimizes
+earliest-arrival queries for two criterias:
+
+- Earliest arrival time.
+- Minimal number of transfers.
+
+Profile queries there have additional criteria - latest departure time.
+
+Such algorithm does not take "footpaths" (transfers between trips) into
+consideration, so e.g. journey with 5 hour-long footpaths will be considered as
+optimal as one with same arrival time and same-stop (i.e. minimal) footpaths.
+
+This creates non-deterministic and rather nonsensical results, where each
+transfer can contain any of the footpath leading to the same trip, picked at
+random.
+
+To avoid these effects, implementation has additional ordering by footpath
+lengths to always pick shortest one between two trips, effectively introducing
+extra criteria - minimal footpath time - on top of ones described in the paper,
+but only to break ties between transfers.
+
+
 Caching
 ```````
 
-For large datasets, using pickle cache to (de-)serialize graphs can be slower
-than re-calculating whole thing from scratch, so might not be worth using.
+For large datasets, using pickle cache (``-c/--cache`` cli option) to
+(de-)serialize graphs can be slower than re-calculating whole thing from
+scratch, so might not be worth using.
 
 
 Tests
@@ -145,7 +171,7 @@ Commands to run tests from checkout directory::
 
   % python3 -m unittest test.all
   % python3 -m unittest test.gtfs_shizuoka
-  % python3 -m unittest -v test.simple
+  % python3 -m unittest -vf test.simple
 
 ``test.all.case`` also provides global index of all test cases by name::
 
@@ -157,9 +183,9 @@ Performance Optimization
 ````````````````````````
 
 Pre-calculation in Trip-Based routing algorithm, as noted in paper, is very
-suitable for further optimization from how it's presented in the paper -
-i.e. three separate "steps" can be merged into one loop, running processing of
-transfers for each trip in parallel.
+suitable for further optimization from how it's presented there - i.e. three
+separate "steps" can be merged into one loop, running processing of transfers
+for each trip in parallel with minimal synchronization.
 
 Python does not provide an easy way to optimize such processing, especially due
 to slow serialization of high-level objects and lack of support for cpu-bound
