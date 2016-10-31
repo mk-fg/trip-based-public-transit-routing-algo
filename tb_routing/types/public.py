@@ -12,6 +12,9 @@ class SolutionStatus(enum.Enum):
 	equal = None
 	undecidable = ...
 
+	def better_if(self, check):
+		return [self.dominated, self.non_dominated][bool(check)]
+
 
 ### TBRoutingEngine input data
 
@@ -188,19 +191,20 @@ class Journey:
 		return self
 
 	def append_fp(self, stop_from, stop_to, dt):
-		if stop_from is not stop_to:
+		if not (stop_from is stop_to or dt == 0):
 			self.segments.append(JourneyFp(stop_from, stop_to, dt))
 			self._stats_cache = None
 		return self
 
-	def compare(self, jn2, _ss=SolutionStatus):
+	def compare(self, jn2, dts_dep_criteria=True, _ss=SolutionStatus):
 		'Return SolutionStatus for this journey as compared to other journey.'
-		if self.dts_arr == jn2.dts_arr and self.trip_count == jn2.trip_count:
-			# Consider footpath_count only if dts_arr and trip_count are equal
-			if self.fp_count == jn2.fp_count: return _ss.equal
-			return [_ss.dominated, _ss.non_dominated][self.fp_count < jn2.fp_count]
-		if self.dts_arr >= jn2.dts_arr and self.trip_count >= jn2.trip_count: return _ss.dominated
-		if self.dts_arr <= jn2.dts_arr and self.trip_count <= jn2.trip_count: return _ss.non_dominated
+		jn1 = self
+		if jn1.dts_arr == jn2.dts_arr and jn1.trip_count == jn2.trip_count:
+			if jn1.dts_dep != jn2.dts_dep: return _ss.better_if(jn1.dts_dep > jn2.dts_dep)
+			if jn1.fp_count != jn2.fp_count: return _ss.better_if(jn1.fp_count < jn2.fp_count)
+			return _ss.equal
+		if jn1.dts_arr >= jn2.dts_arr and jn1.trip_count >= jn2.trip_count: return _ss.dominated
+		if jn1.dts_arr <= jn2.dts_arr and jn1.trip_count <= jn2.trip_count: return _ss.non_dominated
 
 	def __len__(self): return len(self.segments)
 	def __iter__(self): return iter(self.segments)
@@ -248,13 +252,14 @@ class Journey:
 class JourneySet:
 	journeys = u.attr_init(set)
 
-	def add(self, journey):
+	def add(self, journey, dts_dep_criteria=True):
 		'''Add Journey, maintaining pareto-optimality of the set.'''
 		for jn2 in list(self.journeys):
-			ss = journey.compare(jn2)
+			ss = journey.compare(jn2, dts_dep_criteria=dts_dep_criteria)
 			if ss is SolutionStatus.dominated: break
 			if ( ss is SolutionStatus.non_dominated
-				and jn2.compare(journey) is SolutionStatus.dominated ): self.journeys.remove(jn2)
+				and (not dts_dep_criteria or journey.dts_arr == jn2.dts_arr)
+				and SolutionStatus.dominated ): self.journeys.remove(jn2)
 		else: self.journeys.add(journey)
 
 	def __len__(self): return len(self.journeys)
