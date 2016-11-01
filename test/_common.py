@@ -146,14 +146,18 @@ def struct_from_val(val, cls, as_tuple=False):
 	else: raise ValueError(val)
 	return val if not as_tuple else tb.u.attr.astuple(val)
 
-@tb.utils.attr_struct
+@tb.u.attr_struct
 class JourneyStats: keys = 'start end'
 
-@tb.utils.attr_struct
+@tb.u.attr_struct
 class JourneySeg: keys = 'type src dst'
 
-@tb.utils.attr_struct
-class TestGoal: keys = 'src dst dts_start'
+@tb.u.attr_struct
+class TestGoal:
+	src = tb.u.attr_init()
+	dst = tb.u.attr_init()
+	dts_start = tb.u.attr_init()
+	dts_latest = tb.u.attr_init(None)
 
 
 def dts_parse(dts_str):

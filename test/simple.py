@@ -56,7 +56,11 @@ class SimpleTestCase(unittest.TestCase):
 		goal = c.struct_from_val(self.test_data.goal, c.TestGoal)
 		goal.dts_start = c.dts_parse(goal.dts_start)
 		goal.src, goal.dst = op.itemgetter(goal.src, goal.dst)(timetable.stops)
-		journeys = router.query_earliest_arrival(goal.src, goal.dst, goal.dts_start)
+		if not goal.dts_latest:
+			journeys = router.query_earliest_arrival(goal.src, goal.dst, goal.dts_start)
+		else:
+			goal.dts_latest = c.dts_parse(goal.dts_latest)
+			journeys = router.query_profile(goal.src, goal.dst, goal.dts_start, goal.dts_latest)
 		checks.assert_journey_results(self.test_data, journeys)
 
 

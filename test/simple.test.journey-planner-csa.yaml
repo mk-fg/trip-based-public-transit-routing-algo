@@ -205,3 +205,77 @@ testNonTimetableOnly:
       stats: ['9:00', '9:30']
       segments:
         walk: [fp, A, D]
+
+
+profile:
+  timetable:
+    trips:
+
+      # Dominated journey due to early departure with same arrival
+      CS1232:
+        - [A, x, '10:00']
+        - [C, '11:30', x]
+
+      # This leads to optimal journey for earliest-query,
+      #  with arrival at 12:00 and 3 trips, BUT not good enough for
+      #  profile query, which also has same-arrival journey with less hops.
+      CS1233:
+        - [A, x, '11:10']
+        - [X1, '11:00', '11:05']
+        - [B, '11:20', '11:30']
+        - [X2, '12:00', x]
+      CS1234:
+        - [Y1, x, '10:50']
+        - [B, '11:10', '11:28']
+        - [C, '11:30', x]
+
+      # Leads to 10:50-12:00/2 optimal
+      CS1235:
+        - [A, x, '10:50']
+        - [B, '11:00', '11:05']
+        - [C, '11:30', x]
+
+      # Leads to 11:10-13:00/2 optimal
+      CS1236:
+        - [A, x, '11:10']
+        - [B, '11:35', '11:45']
+        - [C, '12:30', x]
+
+      # Optimal because single src-dst trip
+      CS1237:
+        - [A, '9:00', '9:20']
+        - [Z1, '9:30', '9:40']
+        - [Z2, '10:00', '10:10']
+        - [Z3, '10:20', '10:30']
+        - [Z4, '10:40', '10:50']
+        - [Z5, '11:00', '11:10']
+        - [Z6, '11:10', '11:20']
+        - [Z7, '11:30', '11:40']
+        - [B, '11:50', '12:00']
+        - [D, '14:00', x]
+
+      # End-trips
+      CS1238:
+        - [C, '11:30', '11:40']
+        - [D, '12:00', x]
+      CS1239:
+        - [C, '12:30', '12:40']
+        - [D, '13:00', x]
+
+  goal: [A, D, '9:00', '14:00']
+
+  journey_set:
+    journey-A:
+      stats: ['11:10', '13:00']
+      segments:
+        trip-A: [trip, A, C]
+        trip-B: [trip, C, D]
+    journey-B:
+      stats: ['10:50', '12:00']
+      segments:
+        trip-A: [trip, A, C]
+        trip-B: [trip, C, D]
+    journey-C:
+      stats: ['9:20', '14:00']
+      segments:
+        direct-trip: [trip, A, D]
