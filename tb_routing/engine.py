@@ -203,7 +203,7 @@ class TBRoutingEngine:
 							if dt_fp is u.inf: continue
 							jn = jsf.journey.copy()
 							if ts.trip: jn.append_trip(jsf.ts_src, ts)
-							if ts.stop is not stop_dst: jn.append_fp(ts.stop, stop_dst, dt_fp)
+							jn.append_fp(ts.stop, stop_dst, dt_fp)
 							queue.append(JourneySoFar(None, jn, jsf.prio + dt_fp))
 
 					elif not jsf.ts_src.trip: # footpath from stop_src, not a trip
