@@ -81,13 +81,9 @@ class TransferSet:
 		self.set_idx[k1][k2] = transfer
 		self.set_idx_keys[transfer.id] = k1, k2
 
-	def from_trip_stop( self, trip_stop,
-			# Complex key is to provide deterministic sorting, only "dt" matters here otherwise
-			_sort_key=op.attrgetter('dt', 'ts_from.stopidx',
-				'ts_to.stopidx', 'ts_from.trip.id', 'ts_to.trip.id') ):
-		'Return tuples of (transfer_id, transfer) from trip_stop, in min-footpath-time order.'
+	def from_trip_stop(self, trip_stop):
 		k1 = trip_stop.trip.id, trip_stop.stopidx
-		return sorted(self.set_idx.get(k1, dict()).values(), key=_sort_key)
+		return self.set_idx.get(k1, dict()).values()
 
 	def __contains__(self, transfer):
 		k1, k2 = self.set_idx_keys[transfer.id]
