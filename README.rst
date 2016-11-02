@@ -142,18 +142,13 @@ earliest-arrival queries for two criterias:
 
 Profile queries there have additional criteria - latest departure time.
 
-Such algorithm does not take "footpaths" (transfers between trips) into
-consideration, so e.g. journey with 5 hour-long footpaths will be considered as
-optimal as one with same arrival time and same-stop (i.e. minimal) footpaths.
+Result of this algorithm is a pareto-optimal set of trip-sequences (i.e. graph
+nodes) that lead to optimal set of these parameters.
 
-This creates non-deterministic and rather nonsensical results, where each
-transfer can contain any of the footpath leading to the same trip, picked at
-random.
-
-To avoid these effects, implementation has additional ordering by footpath
-lengths to always pick shortest one between two trips, effectively introducing
-extra criteria - minimal footpath time - on top of ones described in the paper,
-but only to break ties between transfers.
+To construct journey info from such nodes (trips) in a deterministic and
+somewhat sensible fashion, additional "minmal footpath time" criteria is used to
+pick optimal edges (footpaths/interchanges), with earliest optimal footpath
+preferred over later ones in case of ties.
 
 
 Caching
