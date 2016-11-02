@@ -72,7 +72,10 @@ class Footpaths:
 
 	def to_stops_from(self, stop): return self.set_idx_to[stop].items()
 	def from_stops_to(self, stop): return self.set_idx_from[stop].items()
-	def time_delta(self, stop_from, stop_to): return self.set_idx_to[stop_from][stop_to]
+
+	def time_delta(self, stop_from, stop_to, default=...):
+		if default is ...: return self.set_idx_to[stop_from][stop_to]
+		return self.set_idx_to[stop_from].get(stop_to, default)
 
 	def between(self, stop_a, stop_b):
 		'Return footpath dt in any direction between two stops.'
@@ -104,6 +107,9 @@ class TripStop:
 	stop = u.attr_init()
 	dts_arr = u.attr_init(convert=trip_stop_daytime)
 	dts_dep = u.attr_init(convert=trip_stop_daytime)
+
+	@classmethod
+	def dummy_for_stop(cls, stop): return cls(None, 0, stop, 0, 0)
 
 	def __hash__(self): return hash((self.trip, self.stopidx))
 	def __repr__(self): # mostly to avoid recursion
@@ -221,10 +227,10 @@ class Journey:
 			if isinstance(seg, JourneyTrip):
 				if not points:
 					points.append(
-						'{0.stopidx}:{0.stop.id}:{0.stop.name} [{dts_dep}]'\
+						'{0.trip.id}:{0.stopidx}:{0.stop.id}:{0.stop.name} [{dts_dep}]'\
 						.format(seg.ts_from, dts_dep=self.dts_format(seg.ts_from.dts_dep)) )
 				points.append(
-					'{0.stopidx}:{0.stop.id}:{0.stop.name} [{dts_arr}]'\
+					'{0.trip.id}:{0.stopidx}:{0.stop.id}:{0.stop.name} [{dts_arr}]'\
 					.format(seg.ts_to, dts_arr=self.dts_format(seg.ts_to.dts_arr)) )
 			elif isinstance(seg, JourneyFp):
 				points.append('(fp-to={0.id}:{0.name} dt={1})'.format(
@@ -256,7 +262,7 @@ class JourneySet:
 		'''Add Journey, maintaining pareto-optimality of the set.'''
 		for jn2 in list(self.journeys):
 			ss = journey.compare(jn2, dts_dep_criteria=dts_dep_criteria)
-			if ss is SolutionStatus.dominated: break
+			if ss is SolutionStatus.dominated or ss is SolutionStatus.equal: break
 			if ( ss is SolutionStatus.non_dominated
 				and (not dts_dep_criteria or journey.dts_arr == jn2.dts_arr)
 				and SolutionStatus.dominated ): self.journeys.remove(jn2)

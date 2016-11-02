@@ -180,6 +180,55 @@ class TBRoutingEngine:
 		return transfers
 
 
+	def jtrips_to_journeys(self, stop_src, stop_dst, dts_src, results, dts_dep_criteria=False):
+		'Convert lists of trips to JourneySet with proper journey descriptions.'
+		JourneySoFar = namedtuple('JSF', 'ts_src journey prio') # unfinished journey up to ts_src
+		get_dt_fp = ft.partial(self.graph.timetable.footpaths.time_delta, default=u.inf)
+
+		journeys = t.public.JourneySet()
+		for jtrips in results:
+			queue = [JourneySoFar(
+				t.public.TripStop.dummy_for_stop(stop_src),
+				t.public.Journey(dts_src), prio=0 )]
+
+			for trip in it.chain(jtrips, [None]): # +1 iteration to add fp to stop_dst
+				queue_prev, queue = queue, list()
+				for jsf in queue_prev:
+					if not jsf: continue
+
+					if not trip: # final footpath to stop_dst
+						ts_list = jsf.ts_src.trip[jsf.ts_src.stopidx+1:] if jsf.ts_src.trip else [jsf.ts_src]
+						for ts in ts_list:
+							dt_fp = get_dt_fp(ts.stop, stop_dst)
+							if dt_fp is u.inf: continue
+							jn = jsf.journey.copy()
+							if ts.trip: jn.append_trip(jsf.ts_src, ts)
+							if ts.stop is not stop_dst: jn.append_fp(ts.stop, stop_dst, dt_fp)
+							queue.append(JourneySoFar(None, jn, jsf.prio + dt_fp))
+
+					elif not jsf.ts_src.trip: # footpath from stop_src, not a trip
+						for ts in trip:
+							dt_fp = get_dt_fp(jsf.ts_src.stop, ts.stop)
+							if dt_fp is u.inf: continue
+							jn = jsf.journey.copy().append_fp(jsf.ts_src.stop, ts.stop, dt_fp)
+							queue.append(JourneySoFar(ts, jn, jsf.prio + dt_fp))
+
+					else: # footpath from previous trip - common case
+						for ts1, ts2 in it.product(jsf.ts_src.trip[jsf.ts_src.stopidx+1:], trip):
+							dt_fp = get_dt_fp(ts1.stop, ts2.stop)
+							if dt_fp is u.inf: continue
+							if ts1.dts_arr + dt_fp > ts2.dts_dep: continue
+							jn = jsf.journey.copy()
+							jn.append_trip(jsf.ts_src, ts1)
+							jn.append_fp(ts1.stop, ts2.stop, dt_fp)
+							queue.append(JourneySoFar(ts2, jn, jsf.prio + dt_fp))
+
+			best_jsf = min(queue, key=op.attrgetter('prio'))
+			journeys.add(best_jsf.journey, dts_dep_criteria=dts_dep_criteria)
+
+		return journeys
+
+
 	@timer
 	def query_earliest_arrival(self, stop_src, stop_dst, dts_src):
 		'''Algorithm 4: Earliest arrival query.
@@ -188,34 +237,20 @@ class TBRoutingEngine:
 		# XXX: special case of profile-query, should be merged into that
 		timetable, lines, transfers = self.graph
 
-		TripTransferCheck = namedtuple('TTCheck', 'dt_fp trip stopidx n journey')
 		TripSegment = namedtuple('TripSeg', 'trip stopidx_a stopidx_b journey')
-
-		journeys = t.public.JourneySet()
+		results = list()
 		R, Q = dict(), dict()
 
-		## Note: this sub-queue is used fix original algo's quirk where
-		##   additional unnecessary footpaths are not factored into optimality.
-		##  In original paper, first transfer to other TripSegment to be enqueue()'d
-		##   "wins" for all of the stops on it (by updating index R),
-		##    regardless of later-enqueue()'d segments with more optimal journeys.
-		subqueue = list() # Sequence[TripTransferCheck]
-		def subqueue_flush():
-			'enqueue() all TripTransferCheck segments in a most-optimal-first order.'
-			subqueue.sort(key=op.attrgetter('dt_fp', 'stopidx', 'trip.id'))
-			for tt_chk in subqueue: enqueue(tt_chk.trip, tt_chk.stopidx, tt_chk.n, tt_chk.journey)
-			subqueue.clear()
-
-		def enqueue(trip, i, n, journey, _ss=t.public.SolutionStatus):
+		def enqueue(trip, i, n, jtrips, _ss=t.public.SolutionStatus):
 			i_max = len(trip) - 1 # for the purposes of "infinity" here
 			if i >= R.get(trip, i_max): return
 			Q.setdefault(n, deque()).append(
-				TripSegment(trip, i, R.get(trip, i_max), journey) )
+				TripSegment(trip, i, R.get(trip, i_max), jtrips) )
 			for trip_u in lines.line_for_trip(trip)\
 					.trips_by_relation(trip, _ss.non_dominated, _ss.equal):
 				R[trip_u] = min(i, R.get(trip_u, i_max))
 
-		lines_to_dst = dict() # (i, line, dt) indexed by trip
+		lines_to_dst = dict() # {trip: (i, line, dt)}
 		for stop_q, dt_fp in timetable.footpaths.from_stops_to(stop_dst):
 			if stop_q is stop_dst: dt_fp = 0
 			for i, line in lines.lines_with_stop(stop_q):
@@ -226,23 +261,18 @@ class TBRoutingEngine:
 		# Queue initial set of trips (reachable from stop_src) to examine
 		for stop_q, dt_fp in timetable.footpaths.to_stops_from(stop_src):
 			if stop_q is stop_src: dt_fp = 0
-			dts_q = dts_src + dt_fp
-			journey = t.public.Journey(dts_src)
-			journey.append_fp(stop_src, stop_q, dt_fp)
+			dts_q, jtrips = dts_src + dt_fp, list()
 			if stop_q is stop_dst:
-				journeys.add(journey)
+				results.append(jtrips)
 				continue # can't be beaten on time or transfers - can only be extended
 			for i, line in lines.lines_with_stop(stop_q):
-				## Note: "t ← earliest trip" is usually not desirable as a first trip.
-				##  I.e. you'd usually prefer to pick latest trip possible to min dep-to-arr time.
 				trip = line.earliest_trip(i, dts_q)
-				if trip: subqueue.append(TripTransferCheck(dt_fp, trip, i, 0, journey))
-		subqueue_flush()
+				if trip: enqueue(trip, i, 0, jtrips)
 
 		# Main loop
 		t_min, n = u.inf, 0
 		while Q:
-			for trip, b, e, journey in Q.pop(n):
+			for trip, b, e, jtrips in Q.pop(n):
 
 				# Check if trip reaches stop_dst (or its footpath-vicinity) directly
 				for i_dst, line, dt_fp in lines_to_dst.get(trip, list()):
@@ -250,24 +280,17 @@ class TBRoutingEngine:
 					line_dts_dst = trip[i_dst].dts_arr + dt_fp
 					if line_dts_dst < t_min:
 						t_min = line_dts_dst
-						jn_dst = journey.copy().append_trip(trip[b], trip[i_dst])
-						jn_dst.append_fp(trip[i_dst].stop, stop_dst, dt_fp)
-						journeys.add(jn_dst, dts_dep_criteria=False)
+						results.append(jtrips + [trip])
 
 				# Check if trip can lead to nondominated journeys, and queue trips reachable from it
 				if trip[b+1].dts_arr < t_min:
 					for i in range(b+1, e+1): # b < i <= e
 						for transfer in transfers.from_trip_stop(trip[i]):
-							ts_u, dt_fp = transfer.ts_to, transfer.dt
-							jn_u = journey.copy().append_trip(trip[b], trip[i])
-							stop_i, stop_j = trip[i].stop, ts_u.stop
-							jn_u.append_fp(stop_i, stop_j, dt_fp)
-							subqueue.append(TripTransferCheck(dt_fp, ts_u.trip, ts_u.stopidx, n+1, jn_u))
+							enqueue(transfer.ts_to.trip, transfer.ts_to.stopidx, n+1, jtrips + [trip])
 
-			subqueue_flush()
 			n += 1
 
-		return journeys
+		return self.jtrips_to_journeys(stop_src, stop_dst, dts_src, results)
 
 
 	@timer
@@ -278,30 +301,22 @@ class TBRoutingEngine:
 		timetable, lines, transfers = self.graph
 
 		DepartureCriteriaCheck = namedtuple('DCCheck', 'trip stopidx dts_src journey')
-		TripTransferCheck = namedtuple('TTCheck', 'dt_fp trip stopidx n journey')
 		TripSegment = namedtuple('TripSeg', 'trip stopidx_a stopidx_b journey')
 
-		journeys = t.public.JourneySet()
+		results = list()
 		R, Q = dict(), dict()
 
-		subqueue = list() # Sequence[TripTransferCheck]
-		def subqueue_flush():
-			'enqueue() all TripTransferCheck segments in a most-optimal-first order.'
-			subqueue.sort(key=op.attrgetter('dt_fp', 'stopidx', 'trip.id'))
-			for tt_chk in subqueue: enqueue(tt_chk.trip, tt_chk.stopidx, tt_chk.n, tt_chk.journey)
-			subqueue.clear()
-
-		def enqueue(trip, i, n, journey, _ss=t.public.SolutionStatus):
+		def enqueue(trip, i, n, jtrips, _ss=t.public.SolutionStatus):
 			i_max = len(trip) - 1 # for the purposes of "infinity" here
 			if i >= R.get((n, trip), i_max): return
 			Q.setdefault(n, deque()).append(
-				TripSegment(trip, i, R.get((n, trip), i_max), journey) )
+				TripSegment(trip, i, R.get((n, trip), i_max), jtrips) )
 			for trip_u in lines.line_for_trip(trip)\
 					.trips_by_relation(trip, _ss.non_dominated, _ss.equal):
 				i_min = min(i, R.get((n, trip_u), i_max))
 				for n in range(n, max_transfers): R[n, trip_u] = i_min
 
-		lines_to_dst = dict() # (i, line, dt) indexed by trip
+		lines_to_dst = dict() # {trip: (i, line, dt)}
 		for stop_q, dt_fp in timetable.footpaths.from_stops_to(stop_dst):
 			if stop_q is stop_dst: dt_fp = 0
 			for i, line in lines.lines_with_stop(stop_q):
@@ -318,22 +333,17 @@ class TBRoutingEngine:
 					dts_trip = trip[i].dts_dep
 					dts_min, dts_max = dts_trip + dt_fp, dts_trip - dt_fp
 					if not (dts_min >= dts_edt and dts_max <= dts_ldt): continue
-					journey = t.public.Journey(dts_max)
-					journey.append_fp(stop_src, stop_q, dt_fp)
-					profile_queue.append(DepartureCriteriaCheck(trip, i, dts_max, journey))
+					profile_queue.append(DepartureCriteriaCheck(trip, i, dts_max, list()))
 		profile_queue.sort(key=op.attrgetter('dts_src'), reverse=True) # latest-to-earliest
 
 		t_min_idx = dict()
 		for dts_src, checks in it.groupby(profile_queue, op.attrgetter('dts_src')):
 			n = 0
-
-			for trip, stopidx, dts_src, journey in checks:
-				subqueue.append(TripTransferCheck(dt_fp, trip, stopidx, n, journey))
-			subqueue_flush()
+			for trip, stopidx, dts_src, jtrips in checks: enqueue(trip, stopidx, n, jtrips)
 
 			while Q and n < max_transfers:
 				t_min = t_min_idx.get(n, u.inf)
-				for trip, b, e, journey in Q.pop(n):
+				for trip, b, e, jtrips in Q.pop(n):
 
 					# Check if trip reaches stop_dst (or its footpath-vicinity) directly
 					for i_dst, line, dt_fp in lines_to_dst.get(trip, list()):
@@ -341,22 +351,15 @@ class TBRoutingEngine:
 						line_dts_dst = trip[i_dst].dts_arr + dt_fp
 						if line_dts_dst < t_min:
 							t_min_idx[n] = line_dts_dst
-							jn_dst = journey.copy().append_trip(trip[b], trip[i_dst])
-							jn_dst.append_fp(trip[i_dst].stop, stop_dst, dt_fp)
-							journeys.add(jn_dst)
+							results.append(jtrips + [trip])
 
 					# Check if trip can lead to nondominated journeys, and queue trips reachable from it
 					if trip[b+1].dts_arr < t_min:
 						for i in range(b+1, e+1): # b < i <= e
 							for transfer in transfers.from_trip_stop(trip[i]):
-								ts_u, dt_fp = transfer.ts_to, transfer.dt
-								jn_u = journey.copy().append_trip(trip[b], trip[i])
-								stop_i, stop_j = trip[i].stop, ts_u.stop
-								jn_u.append_fp(stop_i, stop_j, dt_fp)
-								subqueue.append(TripTransferCheck(dt_fp, ts_u.trip, ts_u.stopidx, n+1, jn_u))
+								enqueue(transfer.ts_to.trip, transfer.ts_to.stopidx, n+1, jtrips + [trip])
 
-				subqueue_flush()
 				n += 1
 			Q.clear()
 
-		return journeys
+		return self.jtrips_to_journeys(stop_src, stop_dst, dts_src, results, dts_dep_criteria=True)
