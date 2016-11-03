@@ -42,8 +42,8 @@ testMultipleRoutes:
     CS1234:
       - [A, x, '10:15']
       - [B, '10:25', '10:30']
-      - [C, '10:35', '11:00']
-      - [D, '11:15', '11:20']
+      - [C, '11:06', '11:10']
+      - [D, '11:40', '11:45']
       - [E, '11:50', x]
     CS1235:
       - [A, x, '10:10']
@@ -60,7 +60,7 @@ testMultipleRoutes:
 
   journey_set:
     earliest:
-      stats: ['10:15', '11:40']
+      stats: ['10:10', '11:40']
       segments:
         trip-A: [trip, A, C]
         trip-B: [trip, C, E]
