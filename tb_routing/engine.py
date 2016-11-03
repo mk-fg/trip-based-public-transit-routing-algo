@@ -194,7 +194,6 @@ class TBRoutingEngine:
 			for trip in it.chain(jtrips, [None]): # +1 iteration to add fp to stop_dst
 				queue_prev, queue = queue, list()
 				for jsf in queue_prev:
-					if not jsf: continue
 
 					if not trip: # final footpath to stop_dst
 						ts_list = jsf.ts_src.trip[jsf.ts_src.stopidx+1:] if jsf.ts_src.trip else [jsf.ts_src]
