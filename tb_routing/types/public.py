@@ -12,8 +12,9 @@ class SolutionStatus(enum.Enum):
 	equal = None
 	undecidable = ...
 
-	def better_if(self, check):
-		return [self.dominated, self.non_dominated][bool(check)]
+	@classmethod
+	def better_if(cls, check):
+		return [cls.dominated, cls.non_dominated][bool(check)]
 
 
 ### TBRoutingEngine input data
@@ -202,7 +203,7 @@ class Journey:
 			self._stats_cache = None
 		return self
 
-	def compare(self, jn2, dts_dep_criteria=True, _ss=SolutionStatus):
+	def compare(self, jn2, _ss=SolutionStatus):
 		'Return SolutionStatus for this journey as compared to other journey.'
 		jn1 = self
 		if jn1.dts_arr == jn2.dts_arr and jn1.trip_count == jn2.trip_count:
@@ -261,7 +262,7 @@ class JourneySet:
 	def add(self, journey, dts_dep_criteria=True):
 		'''Add Journey, maintaining pareto-optimality of the set.'''
 		for jn2 in list(self.journeys):
-			ss = journey.compare(jn2, dts_dep_criteria=dts_dep_criteria)
+			ss = journey.compare(jn2)
 			if ss is SolutionStatus.dominated or ss is SolutionStatus.equal: break
 			if ( ss is SolutionStatus.non_dominated
 				and (not dts_dep_criteria or journey.dts_arr == jn2.dts_arr)
