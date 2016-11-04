@@ -230,6 +230,8 @@ def main(args=None):
 		datefmt='%Y-%m-%d %H:%M:%S',
 		level=tb.u.logging.DEBUG if opts.debug else tb.u.logging.WARNING )
 
+	conf = Conf()
+	if opts.stops_to_stations: conf.group_stops_into_stations = True
 	conf_engine = tb.engine.EngineConf(
 		log_progress_for={'lines', 'pre_initial_set', 'pre_reduction', 'transfer-patterns'} )
 	timetable, router = init_gtfs_router( opts.gtfs_dir,
