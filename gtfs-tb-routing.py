@@ -211,6 +211,18 @@ def main(args=None):
 		help='Max number of transfers (i.e. interchanges)'
 			' between journey trips allowed in the results. Default: %(default)s')
 
+	cmd = cmds.add_parser('query-transfer-patterns',
+		help='Build/load Transfer-Patterns trie and run queries on it.'
+			' Not implemented.') # XXX
+	cmd.add_argument('-c', '--cache', metavar='path',
+		help='Pickle cache-file to load (if exists)'
+			' or save (if missing) resulting Transfer-Patterns'
+			' prefix-tree from/to (see arXiv:1607.01299v2 paper).')
+	cmd.add_argument('-m', '--max-transfers',
+		type=int, metavar='n', default=15,
+		help='Max number of transfers (i.e. interchanges)'
+			' between journey trips allowed in the results. Default: %(default)s')
+
 	opts = parser.parse_args(sys.argv[1:] if args is None else args)
 
 	tb.u.logging.basicConfig(
@@ -219,7 +231,7 @@ def main(args=None):
 		level=tb.u.logging.DEBUG if opts.debug else tb.u.logging.WARNING )
 
 	conf_engine = tb.engine.EngineConf(
-		log_progress_for={'lines', 'pre_initial_set', 'pre_reduction'} )
+		log_progress_for={'lines', 'pre_initial_set', 'pre_reduction', 'transfer-patterns'} )
 	timetable, router = init_gtfs_router( opts.gtfs_dir,
 		opts.cache, conf_engine=conf_engine, timer_func=calc_timer )
 
@@ -232,8 +244,12 @@ def main(args=None):
 	elif opts.call == 'query-profile':
 		dts_edt, dts_ldt = dts_parse(opts.day_time_earliest), dts_parse(opts.day_time_latest)
 		a, b = timetable.stops[opts.stop_from], timetable.stops[opts.stop_to]
-		journeys = router.query_profile(a, b, dts_edt, dts_ldt, opts.max_transfers)
+		journeys = router.query_profile(a, b, dts_edt, dts_ldt, max_transfers=opts.max_transfers)
 		journeys.pretty_print()
+
+	elif opts.call == 'query-transfer-patterns':
+		tree = router.query_transfer_patterns(max_transfers=opts.max_transfers)
+		print(len(tree))
 
 	else: parser.error('Action not implemented: {}'.format(opts.call))
 

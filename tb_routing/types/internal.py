@@ -24,7 +24,7 @@ class Line:
 	@property
 	def id(self):
 		if not self._id_cache:
-			self._id_cache = hash(tuple(map(op.itemgetter('id'), self.set_idx)))
+			self._id_cache = hash(tuple(map(op.attrgetter('id'), self.set_idx)))
 		return self._id_cache
 
 	def add(self, *trips):

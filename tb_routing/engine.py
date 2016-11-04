@@ -100,7 +100,7 @@ class TBRoutingEngine:
 		'Algorithm 1: Initial transfer computation.'
 		transfers = t.internal.TransferSet()
 
-		progress = self.progress_iter('pre_initial_set', len(timetable.trips))
+		progress = self.progress_iter('pre-initial-set', len(timetable.trips))
 		for n, trip_t in enumerate(timetable.trips):
 			progress.send(['transfer-set-size={:,} processed-trips={:,}', len(transfers), n])
 			for i, ts_p in enumerate(trip_t):
@@ -149,7 +149,7 @@ class TBRoutingEngine:
 				return True
 			return False
 
-		discard_count, progress = 0, self.progress_iter('pre_reduction', len(timetable.trips))
+		discard_count, progress = 0, self.progress_iter('pre-reduction', len(timetable.trips))
 		for trip_t in timetable.trips:
 			min_time_arr, min_time_ch = dict(), dict()
 			progress.send(['transfer-set-size={:,} discarded={:,}', len(transfers), discard_count])
@@ -365,7 +365,7 @@ class TBRoutingEngine:
 
 
 	@timer
-	def query_transfer_patterns(self):
+	def query_transfer_patterns(self, max_transfers=15):
 		'All-to-all profile query, returning prefix-tree of stop_src-to-stop_dst Line connections.'
 
 		# To avoid duplicating paper-1 algos' weird naming/types here:
@@ -378,9 +378,10 @@ class TBRoutingEngine:
 		TripSegment = namedtuple('TripSeg', 'trip stopidx_a stopidx_b ts_list')
 		StopLabel = namedtuple('StopLabel', 'ts ts_list')
 
-		tree = dict()
+		tree, progress = dict(), self.progress_iter('transfer-patterns', len(timetable.stops))
 		for stop_src in timetable.stops:
 			node_src = tree[stop_src] = dict()
+			progress.send(None)
 
 			trip_labels = dict()
 			def enqueue(trip, i, ts_list, _ss=t.public.SolutionStatus):
@@ -399,16 +400,13 @@ class TBRoutingEngine:
 				else: node_src_stops.add(stop_q)
 				for i, line in lines.lines_with_stop(stop_q):
 					for trip in line:
-						dts_trip = trip[i].dts_dep
-						dts_min, dts_max = dts_trip + dt_fp, dts_trip - dt_fp
-						if not (dts_min >= dts_edt and dts_max <= dts_ldt): continue
-						profile_queue.append(DepartureCriteriaCheck(trip, i, dts_max, list()))
+						profile_queue.append(DepartureCriteriaCheck(trip, i, trip[i].dts_dep - dt_fp, list()))
 			profile_queue.sort(key=op.attrgetter('dts_src'), reverse=True) # latest-to-earliest
 
 			stop_labels = dict()
 			for dts_src, checks in it.groupby(profile_queue, op.attrgetter('dts_src')):
 				queue = list()
-				for trip, stopidx, dts_src, ts_list in checks: enqueue(trip, stopidx, journey)
+				for trip, stopidx, dts_src, ts_list in checks: enqueue(trip, stopidx, ts_list)
 
 				for n in range(0, max_transfers):
 					if not queue: break
@@ -429,18 +427,19 @@ class TBRoutingEngine:
 
 							if not dominated:
 								sl = StopLabel(trip[i], ts_list)
-								stop_labels.setdefault(stop, list()).append(sl)
+								stop_labels.setdefault(stop, u.IndexedList()).append(sl)
 
 							for transfer in transfers.from_trip_stop(trip[i]):
 								enqueue(transfer.ts_to.trip, transfer.ts_to.stopidx, ts_list + [trip[i]])
 
 				node = node_src
-				for stop, sl in stop_labels.items():
-					for ts in sl.ts_list:
-						# XXX: note sure if internal nodes should be
-						#  lines or (line, n) tuples, need to check queries
-						node = node.setdefault(lines.line_for_trip(ts.trip), dict())
-						node.setdefault('stops', set()).add(ts.stop)
-					node.setdefault('stops', set()).add(stop)
+				for stop, sl_list in stop_labels.items():
+					for sl in sl_list:
+						for ts in sl.ts_list:
+							# XXX: note sure if internal nodes should be
+							#  lines or (line, n) tuples, need to check queries
+							node = node.setdefault(lines.line_for_trip(ts.trip), dict())
+							node.setdefault('stops', set()).add(ts.stop)
+						node.setdefault('stops', set()).add(stop)
 
 		return tree
