@@ -53,13 +53,14 @@ class Line:
 class Lines:
 
 	def __init__(self):
-		self.idx_stop, self.idx_trip = dict(), dict()
+		self.idx_stop, self.idx_trip, self.idx_id = dict(), dict(), dict()
 
 	def add(self, *lines):
 		for line in lines:
 			for stopidx, ts in enumerate(line[0]):
 				self.idx_stop.setdefault(ts.stop, list()).append((stopidx, line))
 			for trip in line: self.idx_trip[trip] = line
+			self.idx_id[line.id] = line
 
 	def lines_with_stop(self, stop):
 		'All lines going through stop as (stopidx, line) tuples.'
@@ -67,6 +68,7 @@ class Lines:
 
 	def line_for_trip(self, trip): return self.idx_trip[trip]
 
+	def __getitem__(self, line_id): return self.idx_id[line_id]
 	def __iter__(self): return iter(self.idx_trip.values())
 	def __len__(self): return len(set(map(id, self.idx_trip.values())))
 

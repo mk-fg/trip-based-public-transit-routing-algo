@@ -439,8 +439,8 @@ class TBRoutingEngine:
 						for ts in sl.ts_list:
 							# XXX: note sure if internal nodes should be
 							#  lines or (line, n) tuples, need to check queries
-							node = node.setdefault(lines.line_for_trip(ts.trip), dict())
-							node.setdefault('stops', set()).add(ts.stop)
-						node.setdefault('stops', set()).add(stop)
+							node = node[lines.line_for_trip(ts.trip).id] = dict()
+							node.setdefault('stops', set()).add(ts.stop.id)
+						node.setdefault('stops', set()).add(stop.id)
 
 		return tree
