@@ -214,7 +214,7 @@ def main(args=None):
 	cmd = cmds.add_parser('query-transfer-patterns',
 		help='Build/load Transfer-Patterns trie and run queries on it.'
 			' Not implemented.') # XXX
-	cmd.add_argument('-c', '--cache', metavar='path',
+	cmd.add_argument('--tree-cache', metavar='path',
 		help='Pickle cache-file to load (if exists)'
 			' or save (if missing) resulting Transfer-Patterns'
 			' prefix-tree from/to (see arXiv:1607.01299v2 paper).')
@@ -250,8 +250,12 @@ def main(args=None):
 		journeys.pretty_print()
 
 	elif opts.call == 'query-transfer-patterns':
-		tree = router.query_transfer_patterns(max_transfers=opts.max_transfers)
-		print(len(tree))
+		cache_path = opts.tree_cache
+		tp_tree = tb.u.pickle_load(cache_path) if cache_path else None
+		if not tp_tree:
+			tp_tree = router.build_transfer_patterns_tree(max_transfers=opts.max_transfers)
+			if cache_path: tb.u.pickle_dump(tp_tree, cache_path)
+		print(len(tp_tree))
 
 	else: parser.error('Action not implemented: {}'.format(opts.call))
 

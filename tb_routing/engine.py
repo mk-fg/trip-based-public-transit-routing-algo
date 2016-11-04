@@ -365,8 +365,9 @@ class TBRoutingEngine:
 
 
 	@timer
-	def query_transfer_patterns(self, max_transfers=15):
-		'All-to-all profile query, returning prefix-tree of stop_src-to-stop_dst Line connections.'
+	def build_transfer_patterns_tree(self, max_transfers=15):
+		'''Run all-to-all profile queries to build Transfer-Patterns
+			prefix-tree of stop_src-to-stop_dst Line connections.'''
 
 		# To avoid duplicating paper-1 algos' weird naming/types here:
 		#  R -> trip_labels: Mapping[(n, Trip), int]
