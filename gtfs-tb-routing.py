@@ -167,23 +167,50 @@ def init_gtfs_router( gtfs_dir, cache_path=None,
 		router = router_factory(cached_graph=graph)
 	return timetable, router
 
+
 def main(args=None):
 	import argparse
 	parser = argparse.ArgumentParser(
-		description='Simple implementation of graph-db and algos on top of that.')
+		description='Simple implementation of trip-based graph-db and algorithms.')
 	parser.add_argument('gtfs_dir', help='Path to gtfs data directory to build graph from.')
 
-	parser.add_argument('stop_from', help='Stop ID to query journey from. Example: J22209723_0')
-	parser.add_argument('stop_to', help='Stop ID to query journey to. Example: J2220952426_0')
-	parser.add_argument('day_time', nargs='?', default='00:00',
+	group = parser.add_argument_group('Graph options')
+	group.add_argument('-c', '--cache', metavar='path',
+		help='Pickle cache-file to load (if exists)'
+			' or save (if missing) resulting graph data from/to.')
+	group.add_argument('-s', '--stops-to-stations', action='store_true',
+		help='Convert/translate GTFS "stop" ids to "parent_station" ids,'
+				' i.e. group all stops on the station into a single one.'
+			' Can produce smaller graphs that would be easier to query.')
+
+	group = parser.add_argument_group('Misc/debug options')
+	group.add_argument('-d', '--debug', action='store_true', help='Verbose operation mode.')
+
+	cmds = parser.add_subparsers(title='Commands', dest='call')
+
+	cmd = cmds.add_parser('query-earliest-arrival',
+		help='Run earliest arrival query, output resulting journey set.')
+	cmd.add_argument('stop_from', help='Stop ID to query journey from. Example: J22209723_0')
+	cmd.add_argument('stop_to', help='Stop ID to query journey to. Example: J2220952426_0')
+	cmd.add_argument('day_time', nargs='?', default='00:00',
 		help='Day time to start journey at, either as HH:MM,'
 			' HH:MM:SS or just seconds int/float. Default: %(default)s')
 
-	parser.add_argument('-c', '--cache', metavar='path',
-		help='Pickle cache-file to load (if exists)'
-			' or save (if missing) resulting graph data from/to.')
+	cmd = cmds.add_parser('query-profile',
+		help='Run profile query, output resulting journey set.')
+	cmd.add_argument('stop_from', help='Stop ID to query journey from. Example: J22209723_0')
+	cmd.add_argument('stop_to', help='Stop ID to query journey to. Example: J2220952426_0')
+	cmd.add_argument('day_time_earliest', nargs='?', default='00:00',
+		help='Earliest day time to start journey(s) at, either as HH:MM,'
+			' HH:MM:SS or just seconds int/float. Default: %(default)s')
+	cmd.add_argument('day_time_latest', nargs='?', default='24:00',
+		help='Latest day time to start journey(s) at, either as HH:MM,'
+			' HH:MM:SS or just seconds int/float. Default: %(default)s')
+	cmd.add_argument('-m', '--max-transfers',
+		type=int, metavar='n', default=15,
+		help='Max number of transfers (i.e. interchanges)'
+			' between journey trips allowed in the results. Default: %(default)s')
 
-	parser.add_argument('-d', '--debug', action='store_true', help='Verbose operation mode.')
 	opts = parser.parse_args(sys.argv[1:] if args is None else args)
 
 	tb.u.logging.basicConfig(
@@ -191,14 +218,23 @@ def main(args=None):
 		datefmt='%Y-%m-%d %H:%M:%S',
 		level=tb.u.logging.DEBUG if opts.debug else tb.u.logging.WARNING )
 
-	dts_start = dts_parse(opts.day_time)
 	conf_engine = tb.engine.EngineConf(
 		log_progress_for={'lines', 'pre_initial_set', 'pre_reduction'} )
 	timetable, router = init_gtfs_router( opts.gtfs_dir,
 		opts.cache, conf_engine=conf_engine, timer_func=calc_timer )
 
-	a, b = timetable.stops[opts.stop_from], timetable.stops[opts.stop_to]
-	journeys = router.query_earliest_arrival(a, b, dts_start)
-	journeys.pretty_print()
+	if opts.call == 'query-earliest-arrival':
+		dts_start = dts_parse(opts.day_time)
+		a, b = timetable.stops[opts.stop_from], timetable.stops[opts.stop_to]
+		journeys = router.query_earliest_arrival(a, b, dts_start)
+		journeys.pretty_print()
+
+	elif opts.call == 'query-profile':
+		dts_edt, dts_ldt = dts_parse(opts.day_time_earliest), dts_parse(opts.day_time_latest)
+		a, b = timetable.stops[opts.stop_from], timetable.stops[opts.stop_to]
+		journeys = router.query_profile(a, b, dts_edt, dts_ldt, opts.max_transfers)
+		journeys.pretty_print()
+
+	else: parser.error('Action not implemented: {}'.format(opts.call))
 
 if __name__ == '__main__': sys.exit(main())

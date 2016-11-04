@@ -69,7 +69,9 @@ Example usage::
     inflating: gtfs-shizuoka/stop_times.txt
     inflating: gtfs-shizuoka/shapes.txt
 
-  % time ./gtfs-tb-routing.py gtfs-shizuoka -c gtfs-shizuoka.cache.pickle J22209723_0 J2220952426_0
+  % time ./gtfs-tb-routing.py gtfs-shizuoka -c gtfs-shizuoka.cache.pickle \
+      query-earliest-arrival J22209723_0 J2220952426_0
+
   Journey set (1):
     Journey 5596f26afe50 (arrival: 08:43:00, trips: 2):
       trip [95]:
@@ -80,7 +82,9 @@ Example usage::
         to (arr at 08:43:00): 28:ばらの丘一丁目 [J2220952426_0]
   ./gtfs-tb-routing.py ... 8.39s user 0.06s system 99% cpu 8.454 total
 
-  % time ./gtfs-tb-routing.py gtfs-shizuoka -c gtfs-shizuoka.cache.pickle J22209843_0 J222093345_0
+  % time ./gtfs-tb-routing.py gtfs-shizuoka -c gtfs-shizuoka.cache.pickle \
+      query-earliest-arrival J22209843_0 J222093345_0
+
   Journey set (1):
     Journey 5555e3e3c020 (arrival: 07:41:00, trips: 2):
       trip [129]:
@@ -93,6 +97,33 @@ Example usage::
         from (dep at 07:33:00): 38:島田駅 北口２番のりば [J222093340_2]
         to (arr at 07:41:00): 45:島田市民病院 [J222093345_0]
   ./gtfs-tb-routing.py ... 0.85s user 0.04s system 99% cpu 0.894 total
+
+
+  % ./gtfs-tb-routing.py -c gtfs-shizuoka.cache.pickle -d gtfs-shizuoka \
+      query-profile J22209723_0 J2220952426_0
+
+  Journey set (8):
+
+    Journey 555699453210 (arrival: 19:44:00, trips: 2):
+      trip [28]:
+        from (dep at 18:50:00): 10:小川 [J22209723_0]
+        to (arr at 19:33:00): 48:本通三丁目 [J222093339_0]
+      footpath (time: 0:02:10):
+        from: 本通三丁目 [J222093339_0]
+        to: 本通三丁目 [J222093339_1]
+      trip [115]:
+        from (dep at 19:37:00): 21:本通三丁目 [J222093339_1]
+        to (arr at 19:44:00): 28:ばらの丘一丁目 [J2220952426_0]
+
+    Journey 555696d859b8 (arrival: 18:24:00, trips: 2):
+      trip [8]:
+        from (dep at 16:30:00): 10:小川 [J22209723_0]
+        to (arr at 17:15:00): 49:島田駅 北口２番のりば [J222093340_2]
+      trip [14]:
+        from (dep at 18:16:00): 20:島田駅 北口２番のりば [J222093340_2]
+        to (arr at 18:24:00): 28:ばらの丘一丁目 [J2220952426_0]
+  ...
+
 
 Note that second query is much faster due to ``--cache gtfs-shizuoka.cache.pickle``
 option, which allows to reuse pre-calculated data from the first query.
