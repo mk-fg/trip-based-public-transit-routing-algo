@@ -120,8 +120,30 @@ Requirements
 - Python 3.x
 - `attrs <https://attrs.readthedocs.io/en/stable/>`_
 - (for tests only) `PyYAML <http://pyyaml.org/>`_
-- (for Python<3.4 only) `pathlib <https://pypi.python.org/pypi/pathlib2/>`_
+- (for Python<3.4 only) `pathlib2 <https://pypi.python.org/pypi/pathlib2/>`_
 - (for Python<3.4 only) `enum34 <https://pypi.python.org/pypi/enum34/>`_
+
+To install all these on any random system (to ``~/.local/`` with --user)::
+
+  % python3 --version
+  Python 3.3.5 (ea9979b550eeae87924dc4bef06070e8f8d0e22f, Oct 12 2016, 11:31:15)
+  [PyPy 5.5.0-alpha0 with GCC 6.2.1 20160830]
+
+  % python3 -m ensurepip --user
+  % python3 -m pip install --user attrs pyyaml
+
+   ## For python<3.4 only, but safe to run on later ones as well
+  % python3 -m pip install --user pathlib2 enum34
+
+   ## Done, run the app/tests
+  % ./gtfs-tb-routing.py --help
+  ...
+  % python3 -m unittest test.all
+
+Alternatively, run ``python3 -m virtualenv tb-routing-venv &&
+. tb-routing-venv/bin/activate`` before above commands to have these modules
+installed into "tb-routing-venv" dir, if `virtualenv <https://virtualenv.pypa.io/>`_
+module is installed/available (can be installed via pip same as others above).
 
 
 
