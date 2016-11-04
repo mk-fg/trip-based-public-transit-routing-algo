@@ -1,5 +1,5 @@
 import itertools as it, operator as op, functools as ft
-from collections import defaultdict, namedtuple, deque
+from collections import defaultdict, namedtuple
 
 from . import utils as u, types as t
 
@@ -243,7 +243,7 @@ class TBRoutingEngine:
 		def enqueue(trip, i, n, jtrips, _ss=t.public.SolutionStatus):
 			i_max = len(trip) - 1 # for the purposes of "infinity" here
 			if i >= R.get(trip, i_max): return
-			Q.setdefault(n, deque()).append(
+			Q.setdefault(n, list()).append(
 				TripSegment(trip, i, R.get(trip, i_max), jtrips) )
 			for trip_u in lines.line_for_trip(trip)\
 					.trips_by_relation(trip, _ss.non_dominated, _ss.equal):
@@ -308,7 +308,7 @@ class TBRoutingEngine:
 		def enqueue(trip, i, n, jtrips, _ss=t.public.SolutionStatus):
 			i_max = len(trip) - 1 # for the purposes of "infinity" here
 			if i >= R.get((n, trip), i_max): return
-			Q.setdefault(n, deque()).append(
+			Q.setdefault(n, list()).append(
 				TripSegment(trip, i, R.get((n, trip), i_max), jtrips) )
 			for trip_u in lines.line_for_trip(trip)\
 					.trips_by_relation(trip, _ss.non_dominated, _ss.equal):
