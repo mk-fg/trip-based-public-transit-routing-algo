@@ -101,8 +101,9 @@ class TransferSet:
 		k1, k2 = self.set_idx_keys[transfer.id]
 		return bool(self.set_idx.get(k1, dict()).get(k2))
 	def __delitem__(self, transfer):
-		k1, k2 = self.set_idx_keys[transfer.id]
-		return self.set_idx[k1][k2]
+		k1, k2 = self.set_idx_keys.pop(transfer.id)
+		del self.set_idx[k1][k2]
+		if not self.set_idx[k1]: del self.set_idx[k1]
 	def __len__(self): return len(self.set_idx_keys)
 	def __iter__(self):
 		for k1, k2 in self.set_idx_keys.values(): yield self.set_idx[k1][k2]

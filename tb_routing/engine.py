@@ -125,7 +125,7 @@ class TBRoutingEngine:
 	def _pre_remove_u_turns(self, transfers, footpaths):
 		'Algorithm 2: Remove U-turn transfers.'
 		discard_count = 0
-		for transfer in transfers:
+		for transfer in list(transfers):
 			try:
 				ts_t = transfer.ts_from.trip[transfer.ts_from.stopidx-1]
 				ts_u = transfer.ts_to.trip[transfer.ts_to.stopidx+1]
@@ -162,7 +162,7 @@ class TBRoutingEngine:
 					update_min_time(min_time_arr, stop_q, dts_q)
 					update_min_time(min_time_ch, stop_q, dts_q)
 
-				for transfer in transfers.from_trip_stop(ts_p):
+				for transfer in list(transfers.from_trip_stop(ts_p)):
 					trip_u, j = transfer.ts_to.trip, transfer.ts_to.stopidx
 					keep = False
 					for k in range(j+1, len(trip_u)):

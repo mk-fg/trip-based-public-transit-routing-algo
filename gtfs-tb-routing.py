@@ -233,7 +233,7 @@ def main(args=None):
 	conf = Conf()
 	if opts.stops_to_stations: conf.group_stops_into_stations = True
 	conf_engine = tb.engine.EngineConf(
-		log_progress_for={'lines', 'pre_initial_set', 'pre_reduction', 'transfer-patterns'} )
+		log_progress_for={'lines', 'pre-initial-set', 'pre-reduction', 'transfer-patterns'} )
 	timetable, router = init_gtfs_router( opts.gtfs_dir,
 		opts.cache, conf_engine=conf_engine, timer_func=calc_timer )
 
