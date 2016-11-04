@@ -362,3 +362,85 @@ class TBRoutingEngine:
 			Q.clear()
 
 		return self.jtrips_to_journeys(stop_src, stop_dst, dts_src, results, dts_dep_criteria=True)
+
+
+	@timer
+	def query_transfer_patterns(self):
+		'All-to-all profile query, returning prefix-tree of stop_src-to-stop_dst Line connections.'
+
+		# To avoid duplicating paper-1 algos' weird naming/types here:
+		#  R -> trip_labels: Mapping[(n, Trip), int]
+		#  Q -> queue: Sequence[TripSegment] (no point using Q-mapping here)
+
+		timetable, lines, transfers = self.graph
+
+		DepartureCriteriaCheck = namedtuple('DCCheck', 'trip stopidx dts_src ts_list')
+		TripSegment = namedtuple('TripSeg', 'trip stopidx_a stopidx_b ts_list')
+		StopLabel = namedtuple('StopLabel', 'ts ts_list')
+
+		tree = dict()
+		for stop_src in timetable.stops:
+			node_src = tree[stop_src] = dict()
+
+			trip_labels = dict()
+			def enqueue(trip, i, ts_list, _ss=t.public.SolutionStatus):
+				n, i_max = len(ts_list), len(trip) - 1
+				if i >= trip_labels.get((n, trip), i_max): return
+				queue.append(TripSegment(trip, i, trip_labels.get((n, trip), i_max), ts_list))
+				for trip_u in lines.line_for_trip(trip)\
+						.trips_by_relation(trip, _ss.non_dominated, _ss.equal):
+					i_min = min(i, trip_labels.get((n, trip_u), i_max))
+					for n in range(n, max_transfers): trip_labels[n, trip_u] = i_min
+
+			profile_queue = list()
+			node_src_stops = node_src['stops'] = set()
+			for stop_q, dt_fp in timetable.footpaths.to_stops_from(stop_src):
+				if stop_q is stop_src: dt_fp = 0
+				else: node_src_stops.add(stop_q)
+				for i, line in lines.lines_with_stop(stop_q):
+					for trip in line:
+						dts_trip = trip[i].dts_dep
+						dts_min, dts_max = dts_trip + dt_fp, dts_trip - dt_fp
+						if not (dts_min >= dts_edt and dts_max <= dts_ldt): continue
+						profile_queue.append(DepartureCriteriaCheck(trip, i, dts_max, list()))
+			profile_queue.sort(key=op.attrgetter('dts_src'), reverse=True) # latest-to-earliest
+
+			stop_labels = dict()
+			for dts_src, checks in it.groupby(profile_queue, op.attrgetter('dts_src')):
+				queue = list()
+				for trip, stopidx, dts_src, ts_list in checks: enqueue(trip, stopidx, journey)
+
+				for n in range(0, max_transfers):
+					if not queue: break
+					queue_prev, queue = queue, list()
+					for trip, b, e, ts_list in queue_prev:
+						for i in range(b+1, e+1): # b < i <= e
+
+							stop, dominated = trip[i].stop, False
+							if stop in stop_labels:
+								labels = stop_labels[stop]
+								for sl in list(labels):
+									sl_dts_arr, sl_n = sl.ts.dts_arr, len(sl.ts_list)
+									if trip[i].dts_arr >= sl_dts_arr and n >= sl_n:
+										dominated = True
+										break
+									if trip[i].dts_arr <= sl_dts_arr and n <= sl_n:
+										labels.remove(sl) # old label will be dominated by new one
+
+							if not dominated:
+								sl = StopLabel(trip[i], ts_list)
+								stop_labels.setdefault(stop, list()).append(sl)
+
+							for transfer in transfers.from_trip_stop(trip[i]):
+								enqueue(transfer.ts_to.trip, transfer.ts_to.stopidx, ts_list + [trip[i]])
+
+				node = node_src
+				for stop, sl in stop_labels.items():
+					for ts in sl.ts_list:
+						# XXX: note sure if internal nodes should be
+						#  lines or (line, n) tuples, need to check queries
+						node = node.setdefault(lines.line_for_trip(ts.trip), dict())
+						node.setdefault('stops', set()).add(ts.stop)
+					node.setdefault('stops', set()).add(stop)
+
+		return tree

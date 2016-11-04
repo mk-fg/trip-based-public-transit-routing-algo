@@ -20,7 +20,16 @@ class Line:
 		'Sequence of Stops for all of the Trips on this Line.'
 		return list(map(op.attrgetter('stop'), self.set_idx[0].stops))
 
+	_id_cache = None
+	@property
+	def id(self):
+		if not self._id_cache:
+			self._id_cache = hash(tuple(map(op.itemgetter('id'), self.set_idx)))
+		return self._id_cache
+
 	def add(self, *trips):
+		assert not self._id_cache,\
+			'Changing Line after its Trips-derived id was used.'
 		self.set_idx.extend(trips)
 		self.set_idx.sort(key=lambda trip: sum(map(op.attrgetter('dts_arr'), trip)))
 
@@ -36,6 +45,7 @@ class Line:
 			if rel in rel_set: yield line_trip
 
 	def __getitem__(self, k): return self.set_idx[k]
+	def __hash__(self): return hash(self.id)
 	def __len__(self): return len(self.set_idx)
 	def __iter__(self): return iter(self.set_idx)
 
