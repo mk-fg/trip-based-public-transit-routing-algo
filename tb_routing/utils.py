@@ -83,11 +83,12 @@ def pickle_load(name=use_pickle_cache or 'state.pickle', fail=False):
 		if fail: raise
 
 
-class IndexedList(UserList):
-	# Lie! Not actually indexed, just with easy by-id removals
-	def remove(self, v):
+class IDList(UserList):
+	'''Easily-mutable list with element
+		values compared by their id() instead of equality.'''
+	def index(self, v):
 		for n, v2 in enumerate(self.data):
-			if v is v2:
-				self.data.pop(n)
-				break
-		else: raise ValueError(v)
+			if v is v2: return n
+		raise ValueError(v)
+	def remove(self, v): self.data.pop(self.index(v))
+	def __iter__(self): return iter(list(self.data))

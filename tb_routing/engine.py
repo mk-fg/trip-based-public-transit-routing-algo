@@ -377,11 +377,9 @@ class TBRoutingEngine:
 
 		DepartureCriteriaCheck = namedtuple('DCCheck', 'trip stopidx dts_src ts_list')
 		TripSegment = namedtuple('TripSeg', 'trip stopidx_a stopidx_b ts_list')
-		StopLabel = namedtuple('StopLabel', 'ts ts_list')
 
 		tree, progress = dict(), self.progress_iter('transfer-patterns', len(timetable.stops))
 		for stop_src in timetable.stops:
-			node_src = tree[stop_src] = dict()
 			progress.send(None)
 
 			trip_labels = dict()
@@ -394,17 +392,16 @@ class TBRoutingEngine:
 					i_min = min(i, trip_labels.get((n, trip_u), i_max))
 					for n in range(n, max_transfers): trip_labels[n, trip_u] = i_min
 
-			profile_queue = list()
-			node_src_stops = node_src['stops'] = set()
+			profile_queue, node_src = list(), t.internal.TPNode()
 			for stop_q, dt_fp in timetable.footpaths.to_stops_from(stop_src):
 				if stop_q is stop_src: dt_fp = 0
-				else: node_src_stops.add(stop_q)
+				else: node_src.stops.append(stop_q)
 				for i, line in lines.lines_with_stop(stop_q):
 					for trip in line:
 						profile_queue.append(DepartureCriteriaCheck(trip, i, trip[i].dts_dep - dt_fp, list()))
 			profile_queue.sort(key=op.attrgetter('dts_src'), reverse=True) # latest-to-earliest
 
-			stop_labels = dict()
+			stop_labels = dict() # {stop: ts_list}
 			for dts_src, checks in it.groupby(profile_queue, op.attrgetter('dts_src')):
 				queue = list()
 				for trip, stopidx, dts_src, ts_list in checks: enqueue(trip, stopidx, ts_list)
@@ -414,33 +411,30 @@ class TBRoutingEngine:
 					queue_prev, queue = queue, list()
 					for trip, b, e, ts_list in queue_prev:
 						for i in range(b+1, e+1): # b < i <= e
+							ts, ts_list = trip[i], ts_list + [trip[i]]
 
-							stop, dominated = trip[i].stop, False
-							if stop in stop_labels:
-								labels = stop_labels[stop]
-								for sl in list(labels):
-									sl_dts_arr, sl_n = sl.ts.dts_arr, len(sl.ts_list)
-									if trip[i].dts_arr >= sl_dts_arr and n >= sl_n:
-										dominated = True
-										break
-									if trip[i].dts_arr <= sl_dts_arr and n <= sl_n:
-										labels.remove(sl) # old label will be dominated by new one
+							ts_labels = stop_labels.setdefault(ts.stop, u.IDList())
+							for sl in ts_labels:
+								sl_dts_arr, sl_n = sl[-1].dts_arr, len(sl) - 1
+								if ts.dts_arr >= sl_dts_arr and n >= sl_n: break # dominated
+								if ts.dts_arr <= sl_dts_arr and n <= sl_n: ts_labels.remove(sl) # dominates
+							else: ts_labels.append(ts_list) # nondominated
 
-							if not dominated:
-								sl = StopLabel(trip[i], ts_list)
-								stop_labels.setdefault(stop, u.IndexedList()).append(sl)
+							for transfer in transfers.from_trip_stop(ts):
+								enqueue(transfer.ts_to.trip, transfer.ts_to.stopidx, ts_list)
 
-							for transfer in transfers.from_trip_stop(trip[i]):
-								enqueue(transfer.ts_to.trip, transfer.ts_to.stopidx, ts_list + [trip[i]])
-
-				node = node_src
+				tree[stop_src] = node_src
 				for stop, sl_list in stop_labels.items():
 					for sl in sl_list:
-						for ts in sl.ts_list:
-							# XXX: note sure if internal nodes should be
-							#  lines or (line, n) tuples, need to check queries
-							node = node[lines.line_for_trip(ts.trip).id] = dict()
-							node.setdefault('stops', set()).add(ts.stop.id)
-						node.setdefault('stops', set()).add(stop.id)
+						node = node_src
+						for ts in sl:
+							line = lines.line_for_trip(ts.trip)
+							node.lines.append(line)
+							node = tree.setdefault(line, t.internal.TPNode())
+							node.stops.append(ts.stop)
 
 		return tree
+
+
+	# @timer
+	# def query_transfer_patterns(self, tree):

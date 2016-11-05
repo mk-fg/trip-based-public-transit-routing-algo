@@ -113,3 +113,9 @@ class TransferSet:
 class Graph:
 	keys = 'timetable lines transfers'
 	def __iter__(self): return iter(u.attr.astuple(self, recurse=False))
+
+
+@u.attr_struct
+class TPNode:
+	lines = u.attr_init(list)
+	stops = u.attr_init(list)
