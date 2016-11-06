@@ -260,7 +260,7 @@ stops that are close enough.
 
 Script requires node names to have following format::
 
-  L<line1>-<seq1>[/L<line2>-<seq2>]...
+  [<stop-id>:]L<line1>-<seq1>[/L<line2>-<seq2>]...
 
 Where "line" is an arbitrary id for line (group of non-overtaking trips over
 same stops at diff times), and "seq" is a string to sort stops for this line by,
