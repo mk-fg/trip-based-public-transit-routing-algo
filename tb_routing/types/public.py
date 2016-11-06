@@ -86,15 +86,18 @@ class Footpaths:
 	_stats_cache = None
 	def _stats(self):
 		if not self._stats_cache:
-			dt_sum = dt_count = 0
+			dt_sum = dt_count = ch_count = 0
 			for k1,v1 in self.set_idx_to.items():
-				for k2,v in v1.items(): dt_sum, dt_count = dt_sum + v, dt_count + 1
-			self._stats_cache = dt_sum, dt_count
+				for k2,v in v1.items():
+					dt_sum, dt_count = dt_sum + v, dt_count + 1
+					if k1 is k2: ch_count += 1
+			self._stats_cache = dt_sum, dt_count, ch_count
 		return self._stats_cache
 
 	def stat_mean_dt(self):
-		dt_sum, dt_count = self._stats()
+		dt_sum, dt_count, ch_count = self._stats()
 		return dt_sum / dt_count
+	def stat_same_stop_count(self): return self._stats()[2]
 
 	def __len__(self): return self._stats()[1]
 
@@ -140,8 +143,12 @@ class Trip:
 	def __iter__(self): return iter(self.stops)
 
 class Trips(UserList):
-	def add(self, trip): self.append(trip)
-	def stat_mean_stops(self): return sum(len(t) for t in self) / len(self)
+	def add(self, trip):
+		assert len(trip) >= 2, trip
+		self.append(trip)
+	def stat_mean_stops(self):
+		if not len(self): return 0
+		return (sum(len(t) for t in self) / len(self))
 
 
 @u.attr_struct

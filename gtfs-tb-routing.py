@@ -126,12 +126,6 @@ def parse_gtfs_timetable(gtfs_dir, conf):
 				footpaths.add(stop, stop, conf.dt_ch)
 				fp_samestop_count += 1
 
-	log.debug(
-		'Parsed timetable: stops={:,}, footpaths={:,}'
-			' (mean_dt={:,.1f}s, same-stop={:,}), trips={:,} (mean_stops={:,.1f})',
-		len(stops),
-		len(footpaths), footpaths.stat_mean_dt(), fp_samestop_count,
-		len(trips), trips.stat_mean_stops() )
 	return types.Timetable(stops, footpaths, trips)
 
 
@@ -162,6 +156,13 @@ def init_gtfs_router( path, cache_path=None,
 		path = Path(path)
 		if not path_timetable: timetable = timetable_func(path, conf)
 		else: timetable = tb.u.pickle_load(path, fail=True)
+		log.debug(
+			'Parsed timetable: stops={:,}, footpaths={:,}'
+				' (mean_dt={:,.1f}s, same-stop={:,}), trips={:,} (mean_stops={:,.1f})',
+			len(timetable.stops), len(timetable.footpaths),
+			timetable.footpaths.stat_mean_dt(),
+			timetable.footpaths.stat_same_stop_count(),
+			len(timetable.trips), timetable.trips.stat_mean_stops() )
 		router = router_factory(timetable)
 		if cache_path: tb.u.pickle_dump(router.graph, cache_path)
 	else:
