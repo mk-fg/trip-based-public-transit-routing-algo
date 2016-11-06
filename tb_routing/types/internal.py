@@ -78,7 +78,8 @@ class Transfer:
 	ts_from = u.attr_init()
 	ts_to = u.attr_init()
 	dt = u.attr_init(0) # used for min-footpath ordering
-	id = u.attr_init(lambda seq=iter(range(2**40)): next(seq))
+	id = u.attr_init_id()
+	def __hash__(self): return hash(self.id)
 	def __iter__(self): return iter(u.attr.astuple(self, recurse=False))
 
 class TransferSet:
@@ -117,5 +118,6 @@ class Graph:
 
 @u.attr_struct
 class TPNode:
-	lines = u.attr_init(list)
-	stops = u.attr_init(list)
+	lines_to = u.attr_init(set)
+	id = u.attr_init_id()
+	def __hash__(self): return hash(self.id)

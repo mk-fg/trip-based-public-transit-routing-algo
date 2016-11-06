@@ -23,7 +23,7 @@ class SolutionStatus(enum.Enum):
 #  timetable, consisting of a set of stops, a set of footpaths and a set of trips."
 
 
-@u.attr_struct(hash=False)
+@u.attr_struct
 class Stop:
 	keys = 'id name lon lat'
 	def __hash__(self): return hash(self.id)
@@ -104,7 +104,7 @@ class Footpaths:
 
 trip_stop_daytime = lambda dts: dts % (24 * 3600)
 
-@u.attr_struct(hash=False, repr=False)
+@u.attr_struct(repr=False)
 class TripStop:
 	trip = u.attr_init()
 	stopidx = u.attr_init()
@@ -121,10 +121,10 @@ class TripStop:
 			'trip_id={0.trip.id}, stopidx={0.stopidx}, stop_id={0.stop.id},'
 			' dts_arr={0.dts_arr}, dts_dep={0.dts_dep})' ).format(self)
 
-@u.attr_struct(hash=False)
+@u.attr_struct
 class Trip:
 	stops = u.attr_init(list)
-	id = u.attr_init(lambda seq=iter(range(2**40)): next(seq))
+	id = u.attr_init_id()
 	def __hash__(self): return hash(self.id)
 
 	def add(self, stop): self.stops.append(stop)
@@ -161,7 +161,7 @@ class Timetable: keys = 'stops footpaths trips'
 JourneyTrip = namedtuple('JTrip', 'ts_from ts_to')
 JourneyFp = namedtuple('JFootpath', 'stop_from stop_to dt')
 
-@u.attr_struct(slots=False, hash=False, repr=False)
+@u.attr_struct(slots=False, repr=False)
 class Journey:
 	dts_start = u.attr_init()
 	segments = u.attr_init(list)

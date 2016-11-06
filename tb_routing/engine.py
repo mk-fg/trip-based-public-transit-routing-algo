@@ -378,30 +378,35 @@ class TBRoutingEngine:
 		DepartureCriteriaCheck = namedtuple('DCCheck', 'trip stopidx dts_src ts_list')
 		TripSegment = namedtuple('TripSeg', 'trip stopidx_a stopidx_b ts_list')
 
-		tree, progress = dict(), self.progress_iter('transfer-patterns', len(timetable.stops))
+		tree = dict() # adj-lists, with nodes being either Stop or Line objects
+		stop_labels = dict() # {stop: ts_list (all TripStops on the way from stop_src to stop)}
+		trip_tails_checked = dict() # {trip: earliest_checked_stopidx}
+
+		def enqueue(trip, i, ts_list, _ss=t.public.SolutionStatus):
+			'Ensures that each TripStop is only ever processed once via trip_tails_checked index.'
+			n, i_max = len(ts_list), len(trip) - 1
+			if i >= trip_tails_checked.get((n, trip), i_max): return
+			queue.append(TripSegment(trip, i, trip_tails_checked.get((n, trip), i_max), ts_list))
+			for trip_u in lines.line_for_trip(trip)\
+					.trips_by_relation(trip, _ss.non_dominated, _ss.equal):
+				i_min = min(i, trip_tails_checked.get((n, trip_u), i_max))
+				for n in range(n, max_transfers): trip_tails_checked[n, trip_u] = i_min
+
+		progress = self.progress_iter('transfer-patterns', len(timetable.stops))
 		for stop_src in timetable.stops:
-			progress.send(None)
+			progress.send(['tree-nodes={}', len(tree)])
 
-			trip_labels = dict()
-			def enqueue(trip, i, ts_list, _ss=t.public.SolutionStatus):
-				n, i_max = len(ts_list), len(trip) - 1
-				if i >= trip_labels.get((n, trip), i_max): return
-				queue.append(TripSegment(trip, i, trip_labels.get((n, trip), i_max), ts_list))
-				for trip_u in lines.line_for_trip(trip)\
-						.trips_by_relation(trip, _ss.non_dominated, _ss.equal):
-					i_min = min(i, trip_labels.get((n, trip_u), i_max))
-					for n in range(n, max_transfers): trip_labels[n, trip_u] = i_min
+			stop_labels.clear()
+			trip_tails_checked.clear()
 
-			profile_queue, node_src = list(), t.internal.TPNode()
+			profile_queue = list()
 			for stop_q, dt_fp in timetable.footpaths.to_stops_from(stop_src):
 				if stop_q is stop_src: dt_fp = 0
-				else: node_src.stops.append(stop_q)
 				for i, line in lines.lines_with_stop(stop_q):
 					for trip in line:
 						profile_queue.append(DepartureCriteriaCheck(trip, i, trip[i].dts_dep - dt_fp, list()))
 			profile_queue.sort(key=op.attrgetter('dts_src'), reverse=True) # latest-to-earliest
 
-			stop_labels = dict() # {stop: ts_list}
 			for dts_src, checks in it.groupby(profile_queue, op.attrgetter('dts_src')):
 				queue = list()
 				for trip, stopidx, dts_src, ts_list in checks: enqueue(trip, stopidx, ts_list)
@@ -413,25 +418,36 @@ class TBRoutingEngine:
 						for i in range(b+1, e+1): # b < i <= e
 							ts, ts_list = trip[i], ts_list + [trip[i]]
 
-							ts_labels = stop_labels.setdefault(ts.stop, u.IDList())
-							for sl in ts_labels:
-								sl_dts_arr, sl_n = sl[-1].dts_arr, len(sl) - 1
-								if ts.dts_arr >= sl_dts_arr and n >= sl_n: break # dominated
-								if ts.dts_arr <= sl_dts_arr and n <= sl_n: ts_labels.remove(sl) # dominates
-							else: ts_labels.append(ts_list) # nondominated
+							# Update labels for all stops reachable from this TripStop
+							for stop_q, dt_fp in timetable.footpaths.to_stops_from(ts.stop):
+								stop_q_arr = ts.dts_arr + dt_fp
+								ts_labels = stop_labels.setdefault(stop_q, u.IDList())
+								for sl in ts_labels:
+									sl_dts_arr, sl_n = sl[-1].dts_arr, len(sl) - 1
+									if stop_q_arr >= sl_dts_arr and n >= sl_n: break # dominated
+									if stop_q_arr <= sl_dts_arr and n <= sl_n: ts_labels.remove(sl) # dominates
+								else: ts_labels.append(ts_list) # nondominated
 
 							for transfer in transfers.from_trip_stop(ts):
 								enqueue(transfer.ts_to.trip, transfer.ts_to.stopidx, ts_list)
 
-				tree[stop_src] = node_src
-				for stop, sl_list in stop_labels.items():
-					for sl in sl_list:
-						node = node_src
-						for ts in sl:
-							line = lines.line_for_trip(ts.trip)
-							node.lines.append(line)
-							node = tree.setdefault(line, t.internal.TPNode())
-							node.stops.append(ts.stop)
+			# Merge stop labels into common prefix tree,
+			#  with line-nodes leading from destination stop(s) to source
+			node_src = tree.setdefault(stop_src, t.internal.TPNode())
+			for stop_dst, sl_list in stop_labels.items():
+				node_dst = tree.setdefault(stop_dst, t.internal.TPNode())
+				for sl in sl_list:
+					node = node_dst
+					for ts in reversed(sl):
+						line = lines.line_for_trip(ts.trip)
+						node.lines_to.add(line)
+						node = tree.setdefault(line, t.internal.TPNode())
+					node.lines_to.add(node_src)
+
+		self.log.debug(
+			'Search-tree stats: nodes={:,} (stops={:,}, lines={:,}), edges={:,}',
+			len(tree), len(timetable.stops), len(tree) - len(timetable.stops),
+			sum(len(node.lines_to) for node in tree.values()) )
 
 		return tree
 

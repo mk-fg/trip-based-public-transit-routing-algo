@@ -35,12 +35,15 @@ def attr_struct(cls=None, vals_to_attrs=False, **kws):
 		for k, v in vars(cls).items():
 			if k.startswith('_') or k in keys or callable(v): continue
 			setattr(cls, k, attr.ib(v))
+	kws.setdefault('hash', not hasattr(cls, '__hash__'))
 	kws.setdefault('slots', True)
 	return attr.s(cls, **kws)
 
 def attr_init(factory_or_default=attr.NOTHING, **attr_kws):
 	if callable(factory_or_default): factory_or_default = attr.Factory(factory_or_default)
 	return attr.ib(default=factory_or_default, **attr_kws)
+
+attr_init_id = lambda: attr_init(lambda seq=iter(range(2**40)): next(seq))
 
 
 def die(code=0):
