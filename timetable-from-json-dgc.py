@@ -104,7 +104,7 @@ def main(args=None):
 		if not m: raise ValueError(node)
 		stop_id, line_id, line_seq = m.groups()
 		stop = stops.add(types.Stop(
-			stop_id or node.id, node.title, node.x, node.y ))
+			stop_id or node.title, node.title, node.x, node.y ))
 		lines.setdefault(line_id, list()).append((line_seq, stop))
 
 	for line_id, line in sorted(lines.items()):

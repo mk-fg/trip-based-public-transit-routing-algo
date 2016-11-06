@@ -150,8 +150,8 @@ def calc_timer(func, *args, log=tb.u.get_logger('timer'), **kws):
 	log.debug('[{}] Finished in: {:.1f}s', func_id, td)
 	return data
 
-def init_gtfs_router( gtfs_dir, cache_path=None,
-		conf=None, conf_engine=None, timer_func=None ):
+def init_gtfs_router( path, cache_path=None,
+		conf=None, conf_engine=None, path_timetable=False, timer_func=None ):
 	if not conf: conf = Conf()
 	timetable_func = parse_gtfs_timetable\
 		if not timer_func else ft.partial(timer_func, parse_gtfs_timetable)
@@ -159,7 +159,9 @@ def init_gtfs_router( gtfs_dir, cache_path=None,
 		tb.engine.TBRoutingEngine, conf=conf_engine, timer_func=timer_func )
 	graph = tb.u.pickle_load(cache_path) if cache_path else None
 	if not graph:
-		timetable = timetable_func(Path(gtfs_dir), conf)
+		path = Path(path)
+		if not path_timetable: timetable = timetable_func(path, conf)
+		else: timetable = tb.u.pickle_load(path, fail=True)
 		router = router_factory(timetable)
 		if cache_path: tb.u.pickle_dump(router.graph, cache_path)
 	else:
@@ -184,6 +186,8 @@ def main(args=None):
 			' Can produce smaller graphs that would be easier to query.')
 
 	group = parser.add_argument_group('Misc/debug options')
+	group.add_argument('-t', '--timetable', action='store_true',
+		help='Treat "gtfs_dir" argument as a pickled TImetable object.')
 	group.add_argument('-d', '--debug', action='store_true', help='Verbose operation mode.')
 
 	cmds = parser.add_subparsers(title='Commands', dest='call')
@@ -235,7 +239,8 @@ def main(args=None):
 	conf_engine = tb.engine.EngineConf(
 		log_progress_for={'lines', 'pre-initial-set', 'pre-reduction', 'transfer-patterns'} )
 	timetable, router = init_gtfs_router( opts.gtfs_dir,
-		opts.cache, conf_engine=conf_engine, timer_func=calc_timer )
+		opts.cache, conf_engine=conf_engine,
+		path_timetable=opts.timetable, timer_func=calc_timer )
 
 	if opts.call == 'query-earliest-arrival':
 		dts_start = dts_parse(opts.day_time)

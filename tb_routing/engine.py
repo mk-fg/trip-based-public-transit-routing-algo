@@ -361,7 +361,7 @@ class TBRoutingEngine:
 				n += 1
 			Q.clear()
 
-		return self.jtrips_to_journeys(stop_src, stop_dst, dts_src, results, dts_dep_criteria=True)
+		return self.jtrips_to_journeys(stop_src, stop_dst, dts_edt, results, dts_dep_criteria=True)
 
 
 	@timer
