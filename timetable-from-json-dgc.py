@@ -14,6 +14,7 @@ class Conf:
 	line_kmh = 50, 100, 10
 	fp_kmh = 5
 	fp_dt_base = 2
+	fp_dt_max = 8
 	dt_ch = 2
 
 # How to pick these - find 3 stop-pairs, where these should hold:
@@ -125,11 +126,13 @@ def main(args=None):
 						calc_dt_line(dist(ts.stop, stop), line_kmh), 60 )[0] * 60
 				dts_dep = dts_arr + rand_int_align(*conf.line_stop_linger)*60
 				trip.add(types.TripStop(trip, stopidx, stop, dts_arr, dts_dep))
+			trips.add(trip)
 
 	for stop in stops: footpaths.add(stop, stop, conf.dt_ch*60)
 	for stop_a, stop_b in it.permutations(stops, 2):
 		footpaths.add( stop_a, stop_b,
 			int(calc_dt_fp(dist(stop_a, stop_b), conf.fp_kmh, conf.fp_dt_base)) )
+	footpaths.discard_longer(conf.fp_dt_max*60)
 
 	timetable = types.Timetable(stops, footpaths, trips)
 	with pathlib.Path(opts.tt_pickle).open('wb') as dst: pickle.dump(timetable, dst)
