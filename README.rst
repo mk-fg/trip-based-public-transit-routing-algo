@@ -184,7 +184,7 @@ Notes
 Some less obvious things are described in this section.
 
 
-Journey Optimality Criterias
+Journey optimality criterias
 ````````````````````````````
 
 Trip-Based algorithm, as described in the `arXiv:1504.07149v2`_ paper optimizes
@@ -227,7 +227,7 @@ Commands to run tests from checkout directory::
   % python3 -m unittest test.all.case.testMultipleRoutes
 
 
-Performance Optimization
+Performance optimization
 ````````````````````````
 
 Pre-calculation in Trip-Based routing algorithm, as noted in paper, is very
@@ -243,8 +243,8 @@ Workarounds are possible, but it's probably not worth considering python code
 for any kind of production use.
 
 
-Mock / testing timetable from json-dgc graph
-````````````````````````````````````````````
+Generating timetables from json-dgc graphs
+``````````````````````````````````````````
 
 `json-dgc <https://github.com/eimink/json-dgc/>`_ is a simple d3-based tool to
 interactively draw and save/load directed graphs to/from JSON.
