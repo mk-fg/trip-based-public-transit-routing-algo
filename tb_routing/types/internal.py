@@ -118,6 +118,7 @@ class Graph:
 
 @u.attr_struct
 class TPNode:
-	lines_to = u.attr_init(set)
+	value = u.attr_init()
+	edges_to = u.attr_init(set)
 	id = u.attr_init_id()
 	def __hash__(self): return hash(self.id)

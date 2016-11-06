@@ -227,6 +227,8 @@ def main(args=None):
 		type=int, metavar='n', default=15,
 		help='Max number of transfers (i.e. interchanges)'
 			' between journey trips allowed in the results. Default: %(default)s')
+	cmd.add_argument('stop_from', help='Stop ID to query journey from. Example: J22209723_0')
+	cmd.add_argument('stop_to', help='Stop ID to query journey to. Example: J2220952426_0')
 
 	opts = parser.parse_args(sys.argv[1:] if args is None else args)
 
@@ -259,9 +261,11 @@ def main(args=None):
 		cache_path = opts.tree_cache
 		tp_tree = tb.u.pickle_load(cache_path) if cache_path else None
 		if not tp_tree:
-			tp_tree = router.build_transfer_patterns_tree(max_transfers=opts.max_transfers)
+			tp_tree = router.build_tp_tree(max_transfers=opts.max_transfers)
 			if cache_path: tb.u.pickle_dump(tp_tree, cache_path)
-		print(len(tp_tree))
+		a, b = timetable.stops[opts.stop_from], timetable.stops[opts.stop_to]
+		tp_query_graph = router.build_tp_query_graph(tp_tree, a, b)
+		print(len(tp_query_graph))
 
 	else: parser.error('Action not implemented: {}'.format(opts.call))
 

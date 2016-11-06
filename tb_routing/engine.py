@@ -365,7 +365,7 @@ class TBRoutingEngine:
 
 
 	@timer
-	def build_transfer_patterns_tree(self, max_transfers=15):
+	def build_tp_tree(self, max_transfers=15):
 		'''Run all-to-all profile queries to build Transfer-Patterns
 			prefix-tree of stop_src-to-stop_dst Line connections.'''
 
@@ -433,24 +433,43 @@ class TBRoutingEngine:
 
 			# Merge stop labels into common prefix tree,
 			#  with line-nodes leading from destination stop(s) to source
-			node_src = tree.setdefault(stop_src, t.internal.TPNode())
+			# XXX: nodes for "src stop X" and "dst stop X" should be separate for thing to be a DAG
+			node_src = tree.setdefault(stop_src, t.internal.TPNode(stop_src))
 			for stop_dst, sl_list in stop_labels.items():
-				node_dst = tree.setdefault(stop_dst, t.internal.TPNode())
+				node_dst = tree.setdefault(stop_dst, t.internal.TPNode(stop_dst))
 				for sl in sl_list:
 					node = node_dst
 					for ts in reversed(sl):
 						line = lines.line_for_trip(ts.trip)
-						node.lines_to.add(line)
-						node = tree.setdefault(line, t.internal.TPNode())
-					node.lines_to.add(node_src)
+						node.edges_to.add(line)
+						node = tree.setdefault(line, t.internal.TPNode(line))
+					node.edges_to.add(stop_src)
 
 		self.log.debug(
 			'Search-tree stats: nodes={:,} (stops={:,}, lines={:,}), edges={:,}',
 			len(tree), len(timetable.stops), len(tree) - len(timetable.stops),
-			sum(len(node.lines_to) for node in tree.values()) )
+			sum(len(node.edges_to) for node in tree.values()) )
 
 		return tree
 
 
-	# @timer
-	# def query_transfer_patterns(self, tree):
+	@timer
+	def build_tp_query_graph(self, tp_tree, stop_src, stop_dst):
+		query_tree = dict()
+		queue = [(tp_tree[stop_dst], list())]
+		while queue:
+			queue_prev, queue = queue, list()
+			for node, path in queue_prev:
+				path += [node]
+				for k in node.edges_to:
+					node_k = tp_tree[k]
+					if k is not stop_src:
+						queue.append((node_k, path))
+						continue
+					for node_p in reversed(path):
+						query_tree\
+							.setdefault(node_k, t.internal.TPNode(node_k.value))\
+							.edges_to.add(node_p)
+						node_k = node_p
+					query_tree.setdefault(node_k, t.internal.TPNode(node_k.value))
+		return query_tree
