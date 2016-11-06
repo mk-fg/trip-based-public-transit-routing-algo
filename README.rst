@@ -243,6 +243,42 @@ Workarounds are possible, but it's probably not worth considering python code
 for any kind of production use.
 
 
+Mock / testing timetable from json-dgc graph
+````````````````````````````````````````````
+
+`json-dgc <https://github.com/eimink/json-dgc/>`_ is a simple d3-based tool to
+interactively draw and save/load directed graphs to/from JSON.
+
+It can be used to draw some testing transport network, using nodes as stops,
+positioning them as they'd be on a flat map (to auto-generate footpaths to ones
+that are close) and naming/connecting them according to trip-lines.
+
+``timetable-from-json-dgc.py`` script can then be used to convert saved JSON
+graph into a pickled timetable, with trips auto-generated to run with regular
+intervals (and some fixed speed) along drawn lines, and footpaths connecting
+stops that are close enough.
+
+Script requires node names to have following format::
+
+  L<line1>-<seq1>[/L<line2>-<seq2>]...
+
+Where "line" is an arbitrary id for line (group of non-overtaking trips over
+same stops at diff times), and "seq" is a string to sort stops for this line by,
+e.g. stops/nodes [L1-a, L1-b, L1-c] will be grouped into same line with 3 stops
+in that "a-b-c" order (alphasort).
+
+Names like "L1-f/L5-a/L3-m" can be used when multiple lines pass through same stop.
+Drawn edges aren't actually used by the script, node names/positions should have
+all the necessary info.
+
+See script itself for all the constants like train/footpath speeds, line trips
+first/last times, intervals, stop arrival-departure deltas, etc.
+
+``timetable-from-json-dgc.example.json`` is an example JSON graph, as produced
+by json-dgc, and can be loaded/tweaked there or used as a template to generate
+with some other tool (just two lists of all nodes / edges).
+
+
 
 Links
 -----
