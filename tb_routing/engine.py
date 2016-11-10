@@ -281,11 +281,11 @@ class TBRoutingEngine:
 						t_min = line_dts_dst
 						results.append(jtrips + [trip])
 
-				# Check if trip can lead to nondominated journeys, and queue trips reachable from it
-				if trip[b+1].dts_arr < t_min:
-					for i in range(b+1, e+1): # b < i <= e
-						for transfer in transfers.from_trip_stop(trip[i]):
-							enqueue(transfer.ts_to.trip, transfer.ts_to.stopidx, n+1, jtrips + [trip])
+				for i in range(b+1, e+1): # b < i <= e
+					if trip[i].dts_arr >= t_min: break # after +1 transfer, it's guaranteed to be dominated
+					for transfer in transfers.from_trip_stop(trip[i]):
+						if transfer.ts_to.dts_arr >= t_min: continue
+						enqueue(transfer.ts_to.trip, transfer.ts_to.stopidx, n+1, jtrips + [trip])
 
 			n += 1
 
@@ -353,10 +353,11 @@ class TBRoutingEngine:
 							results.append(jtrips + [trip])
 
 					# Check if trip can lead to nondominated journeys, and queue trips reachable from it
-					if trip[b+1].dts_arr < t_min:
-						for i in range(b+1, e+1): # b < i <= e
-							for transfer in transfers.from_trip_stop(trip[i]):
-								enqueue(transfer.ts_to.trip, transfer.ts_to.stopidx, n+1, jtrips + [trip])
+					for i in range(b+1, e+1): # b < i <= e
+						if trip[i].dts_arr >= t_min: break # after +1 transfer, it's guaranteed to be dominated
+						for transfer in transfers.from_trip_stop(trip[i]):
+							if transfer.ts_to.dts_arr >= t_min: continue
+							enqueue(transfer.ts_to.trip, transfer.ts_to.stopidx, n+1, jtrips + [trip])
 
 				n += 1
 			Q.clear()
