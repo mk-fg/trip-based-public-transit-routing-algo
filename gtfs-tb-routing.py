@@ -265,7 +265,7 @@ def main(args=None):
 			if cache_path: tb.u.pickle_dump(tp_tree, cache_path)
 		a, b = timetable.stops[opts.stop_from], timetable.stops[opts.stop_to]
 		tp_query_graph = router.build_tp_query_graph(tp_tree, a, b)
-		# print(len(tp_query_graph))
+		print(tp_query_graph.stat_counts())
 
 	else: parser.error('Action not implemented: {}'.format(opts.call))
 

@@ -453,7 +453,8 @@ class TBRoutingEngine:
 
 	@timer
 	def build_tp_query_graph(self, tp_tree, stop_src, stop_dst):
-		# query_tree = dict()
+		query_tree = t.internal.TPTree(prefix=stop_src)
+		node_src, node_dst = map(query_tree.node, [stop_src, stop_dst])
 		subtree = tp_tree[stop_src]
 		queue = [(subtree[stop_dst], list())]
 		while queue:
@@ -465,10 +466,13 @@ class TBRoutingEngine:
 					if node_k.value is not stop_src:
 						queue.append((node_k, path))
 						continue
-					# for node_p in reversed(path):
-					# 	query_tree\
-					# 		.setdefault(node_k, t.internal.TPNode(node_k.value))\
-					# 		.edges_to.add(node_p)
-					# 	node_k = node_p
-					# query_tree.setdefault(node_k, t.internal.TPNode(node_k.value))
-		# return query_tree
+
+					# Add path to query_tree, reusing LineStop nodes
+					node = query_tree.node(node_k)
+					node_src.edges_to.add(node)
+					for node_next in reversed(path):
+						node_next = query_tree.node(node_next)
+						node.edges_to.add(node_next)
+						node = node_next
+					node.edges_to.add(node_dst)
+		return query_tree

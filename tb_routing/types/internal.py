@@ -162,13 +162,12 @@ class TPTree:
 		self.stats = u.init_if_none(stats, Counter)
 
 	def stat_counts(self):
-		assert not self.prefix, 'Only tracked for the whole tree'
 		count_node_t = lambda t,s=self.stats: sum(v for k,v in s.items() if k[0] == t)
 		return TPTreeStats(
 			sum(self.stats.values()), len(self.stats),
 			count_node_t('src'), count_node_t('stop'), count_node_t('linestop'),
 			sum(len(node.edges_to)
-				for subtree in self.tree.values()
+				for subtree in ([self.tree] if self.prefix else self.tree.values())
 				for node_dict in subtree.values()
 				for node in node_dict.values() ) )
 
