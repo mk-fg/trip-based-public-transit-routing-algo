@@ -437,12 +437,14 @@ class TBRoutingEngine:
 			for stop_dst, sl_list in stop_labels.items():
 				node_dst = subtree.node(stop_dst)
 				for sl in sl_list:
-					node, path_nodes = node_dst, list()
+					node = node_dst
 					for ts in reversed(sl):
-						line = lines.line_for_trip(ts.trip)
-						node_prev, node = node, subtree.node(line, no_loops_to=path_nodes)
+						# "no_path_to" check makes sure that there is no reverse-path for
+						#  newly-created edge, as this (and only this) will create loops in the graph.
+						# This check is done for every edge between non-leaf nodes, so there can be no loops.
+						node_prev, node = node, subtree.node(
+							lines.line_for_trip(ts.trip), no_path_to=node )
 						node_prev.edges_to.add(node)
-						path_nodes.append(node)
 					node.edges_to.add(node_src)
 
 		self.log.debug(

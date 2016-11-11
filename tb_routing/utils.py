@@ -46,6 +46,8 @@ def attr_init(factory_or_default=attr.NOTHING, **attr_kws):
 attr_init_id = lambda: attr_init(lambda seq=iter(range(2**40)): next(seq))
 
 
+p = ft.partial(print, flush=True)
+
 def die(code=0):
 	sys.stdout.close()
 	sys.stderr.close()

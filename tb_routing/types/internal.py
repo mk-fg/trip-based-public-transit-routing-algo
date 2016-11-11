@@ -165,19 +165,19 @@ class TPTree:
 				for node_dict in subtree.values()
 				for node in node_dict.values() ) )
 
-	def check_path_to(self, node_src, node_list):
-		queue, node_list = [node_src], u.IDList(node_list)
+	def path_exists(self, node_src, node_dst):
+		queue = [node_src]
 		while queue:
 			queue_prev, queue = queue, list()
 			for node in queue_prev:
-				if node is node_src or node in node_list: return True # found loop
-				queue.extend(it.chain.from_iterable(map(self.get_all, node.edges_to)))
+				if node is node_dst: return True # found path
+				queue.extend(self[k] for k in node.edges_to)
 		return False
 
-	def node(self, k, value=None, t=None, no_loops_to=None):
+	def node(self, k, value=None, t=None, no_path_to=None):
 		'''Returns node with specified k/t or creates new one with value (or k as a fallback value).
-			If list of nodes is passed to no_loops_to, returned node will
-				never contain loops to these, creating another same-k node if necessary.'''
+			If no_path_to node is passed, returned node will never
+				have a path to it, creating another same-k node if necessary.'''
 		assert self.prefix, 'Can only add elements to prefixed subtree'
 		if not t: node_id = TPNodeID.for_k_type(self.prefix, k)
 		else: node_id = TPNodeID(self.prefix, t, k)
@@ -187,10 +187,10 @@ class TPTree:
 			self.stats[node_id.t, node_id.k] += 1
 		else:
 			node_dict = self.tree[node_id]
-			if not no_loops_to: node = next(iter(node_dict.values()))
-			else:
+			if not no_path_to: node = next(iter(node_dict.values()))
+			else: # find node with no reverse path or create new one
 				for node in node_dict.values():
-					if not self.check_path_to(node, no_loops_to): break
+					if not self.path_exists(node, no_path_to): break
 				else:
 					node = TPNode(value or k, node_id)
 					self.tree[node_id][node.seed] = node
