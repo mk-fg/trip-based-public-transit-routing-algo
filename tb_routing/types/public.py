@@ -23,10 +23,13 @@ class SolutionStatus(enum.Enum):
 #  timetable, consisting of a set of stops, a set of footpaths and a set of trips."
 
 
-@u.attr_struct
+@u.attr_struct(repr=False)
 class Stop:
 	keys = 'id name lon lat'
 	def __hash__(self): return hash(self.id)
+	def __repr__(self):
+		if self.id == self.name: return '<Stop {}>'.format(self.id)
+		return '<Stop {} [{}]>'.format(self.name, self.id)
 
 class Stops:
 	def __init__(self): self.set_idx = dict()

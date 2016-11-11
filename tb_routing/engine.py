@@ -379,7 +379,7 @@ class TBRoutingEngine:
 		DepartureCriteriaCheck = namedtuple('DCCheck', 'trip stopidx dts_src ts_list')
 		TripSegment = namedtuple('TripSeg', 'trip stopidx_a stopidx_b ts_list')
 
-		tree = dict() # adj-lists, with nodes being either Stop or Line objects
+		tree = t.internal.TPTree() # adj-lists, with nodes being either Stop or Line objects
 		stop_labels = dict() # {stop: ts_list (all TripStops on the way from stop_src to stop)}
 		trip_tails_checked = dict() # {trip: earliest_checked_stopidx}
 
@@ -395,7 +395,7 @@ class TBRoutingEngine:
 
 		progress = self.progress_iter('transfer-patterns', len(timetable.stops))
 		for stop_src in timetable.stops:
-			progress.send(['tree-nodes={}', len(tree)])
+			progress.send(['tree-nodes={} (unique={})', sum(tree.stats.values()), len(tree.stats)])
 
 			stop_labels.clear()
 			trip_tails_checked.clear()
@@ -432,45 +432,44 @@ class TBRoutingEngine:
 							for transfer in transfers.from_trip_stop(ts):
 								enqueue(transfer.ts_to.trip, transfer.ts_to.stopidx, ts_list)
 
-			# Merge stop labels into common prefix tree,
-			#  with line-nodes leading from destination stop(s) to source
-			# XXX: nodes for "src stop X" and "dst stop X" should be separate for thing to be a DAG
-			node_src = tree.setdefault(stop_src, t.internal.TPNode(stop_src))
+			subtree = tree[stop_src]
+			node_src = subtree.node(stop_src, t='src')
 			for stop_dst, sl_list in stop_labels.items():
-				node_dst = tree.setdefault(stop_dst, t.internal.TPNode(stop_dst))
+				node_dst = subtree.node(stop_dst)
 				for sl in sl_list:
-					node = node_dst
+					node, path_nodes = node_dst, list()
 					for ts in reversed(sl):
 						line = lines.line_for_trip(ts.trip)
-						node.edges_to.add(line)
-						node = tree.setdefault(line, t.internal.TPNode(line))
-					node.edges_to.add(stop_src)
+						node_prev, node = node, subtree.node(line, no_loops_to=path_nodes)
+						node_prev.edges_to.add(node)
+						path_nodes.append(node)
+					node.edges_to.add(node_src)
 
 		self.log.debug(
-			'Search-tree stats: nodes={:,} (stops={:,}, lines={:,}), edges={:,}',
-			len(tree), len(timetable.stops), len(tree) - len(timetable.stops),
-			sum(len(node.edges_to) for node in tree.values()) )
-
+			'Search-tree stats: nodes={0.nodes:,} (unique={0.nodes_unique:,},'
+				' src={0.t_src:,}, dst={0.t_dst:,}, lines={0.t_line:,}), edges={0.edges:,}',
+			tree.stat_counts() )
 		return tree
 
 
 	@timer
 	def build_tp_query_graph(self, tp_tree, stop_src, stop_dst):
-		query_tree = dict()
-		queue = [(tp_tree[stop_dst], list())]
+		# query_tree = dict()
+		subtree = tp_tree[stop_src]
+		queue = [(subtree[stop_dst], list())]
 		while queue:
 			queue_prev, queue = queue, list()
 			for node, path in queue_prev:
 				path += [node]
 				for k in node.edges_to:
-					node_k = tp_tree[k]
-					if k is not stop_src:
+					node_k = subtree[k]
+					if node_k.value is not stop_src:
 						queue.append((node_k, path))
 						continue
-					for node_p in reversed(path):
-						query_tree\
-							.setdefault(node_k, t.internal.TPNode(node_k.value))\
-							.edges_to.add(node_p)
-						node_k = node_p
-					query_tree.setdefault(node_k, t.internal.TPNode(node_k.value))
-		return query_tree
+					# for node_p in reversed(path):
+					# 	query_tree\
+					# 		.setdefault(node_k, t.internal.TPNode(node_k.value))\
+					# 		.edges_to.add(node_p)
+					# 	node_k = node_p
+					# query_tree.setdefault(node_k, t.internal.TPNode(node_k.value))
+		# return query_tree

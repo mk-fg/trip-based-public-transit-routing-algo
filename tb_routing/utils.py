@@ -64,6 +64,10 @@ def get_any(d, *keys):
 		try: return d[k]
 		except KeyError: pass
 
+def init_if_none(v, default):
+	if v is None: v = default() if callable(default) else v
+	return v
+
 inf = float('inf')
 
 
@@ -94,4 +98,8 @@ class IDList(UserList):
 			if v is v2: return n
 		raise ValueError(v)
 	def remove(self, v): self.data.pop(self.index(v))
+	def __contains__(self, v):
+		try: self.index(v)
+		except ValueError: return False
+		else: return True
 	def __iter__(self): return iter(list(self.data))
