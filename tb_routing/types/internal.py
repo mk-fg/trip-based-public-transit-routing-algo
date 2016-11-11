@@ -52,6 +52,13 @@ class Line:
 	def __iter__(self): return iter(self.set_idx)
 
 
+@u.attr_struct
+class LineStop:
+	line = u.attr_init()
+	stopidx = u.attr_init()
+	def __hash__(self): return hash((self.line.id, self.stopidx))
+
+
 class Lines:
 
 	def __init__(self):
@@ -159,7 +166,7 @@ class TPTree:
 		count_node_t = lambda t,s=self.stats: sum(v for k,v in s.items() if k[0] == t)
 		return TPTreeStats(
 			sum(self.stats.values()), len(self.stats),
-			count_node_t('src'), count_node_t('stop'), count_node_t('line'),
+			count_node_t('src'), count_node_t('stop'), count_node_t('linestop'),
 			sum(len(node.edges_to)
 				for subtree in self.tree.values()
 				for node_dict in subtree.values()

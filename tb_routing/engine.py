@@ -439,17 +439,14 @@ class TBRoutingEngine:
 				for sl in sl_list:
 					node = node_dst
 					for ts in reversed(sl):
-						# "no_path_to" check makes sure that there is no reverse-path for
-						#  newly-created edge, as this (and only this) will create loops in the graph.
-						# This check is done for every edge between non-leaf nodes, so there can be no loops.
 						node_prev, node = node, subtree.node(
-							lines.line_for_trip(ts.trip), no_path_to=node )
+							t.internal.LineStop(lines.line_for_trip(ts.trip), ts.stopidx) )
 						node_prev.edges_to.add(node)
 					node.edges_to.add(node_src)
 
 		self.log.debug(
 			'Search-tree stats: nodes={0.nodes:,} (unique={0.nodes_unique:,},'
-				' src={0.t_src:,}, dst={0.t_dst:,}, lines={0.t_line:,}), edges={0.edges:,}',
+				' src={0.t_src:,}, dst={0.t_dst:,}, line-stops={0.t_line:,}), edges={0.edges:,}',
 			tree.stat_counts() )
 		return tree
 
