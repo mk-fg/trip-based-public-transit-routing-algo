@@ -258,14 +258,13 @@ def main(args=None):
 		journeys.pretty_print()
 
 	elif opts.call == 'query-transfer-patterns':
+		dts_edt, dts_ldt = 0, 24*3600 # XXX
+		a, b = timetable.stops[opts.stop_from], timetable.stops[opts.stop_to]
 		cache_path = opts.tree_cache
 		tp_tree = tb.u.pickle_load(cache_path) if cache_path else None
-		if not tp_tree:
-			tp_tree = router.build_tp_tree(max_transfers=opts.max_transfers)
-			if cache_path: tb.u.pickle_dump(tp_tree, cache_path)
-		a, b = timetable.stops[opts.stop_from], timetable.stops[opts.stop_to]
-		tp_query_graph = router.build_tp_query_graph(tp_tree, a, b)
-		print(tp_query_graph.stat_counts())
+		tp_router = router.build_tp_engine(tp_tree)
+		if not tp_tree and cache_path: tb.u.pickle_dump(tp_router.tree, cache_path)
+		print(tp_router.query_profile(a, b, dts_edt, dts_ldt))
 
 	else: parser.error('Action not implemented: {}'.format(opts.call))
 

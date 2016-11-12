@@ -10,6 +10,12 @@ class EngineConf:
 	log_progress_steps = 30
 
 
+def timer(self_or_func, func=None, *args, **kws):
+	'Calculation call wrapper for timer/progress logging.'
+	if not func: return lambda s,*a,**k: s.timer_wrapper(self_or_func, s, *a, **k)
+	return self_or_func.timer_wrapper(func, *args, **kws)
+
+
 class TBRoutingEngine:
 
 	graph = None
@@ -25,12 +31,6 @@ class TBRoutingEngine:
 			transfers = self.precalc_transfer_set(timetable, lines)
 			graph = t.base.Graph(timetable, lines, transfers)
 		self.graph = graph
-
-
-	def timer(self_or_func, func=None, *args, **kws):
-		'Calculation call wrapper for timer/progress logging.'
-		if not func: return lambda s,*a,**k: s.timer_wrapper(self_or_func, s, *a, **k)
-		return self_or_func.timer_wrapper(func, *args, **kws)
 
 	@u.coroutine
 	def progress_iter(self, prefix, n_max, steps=None, n=0):
@@ -446,16 +446,30 @@ class TBRoutingEngine:
 
 		self.log.debug(
 			'Search-tree stats: nodes={0.nodes:,} (unique={0.nodes_unique:,},'
-				' src={0.t_src:,}, dst={0.t_dst:,}, line-stops={0.t_line:,}), edges={0.edges:,}',
+				' src={0.t_src:,}, dst={0.t_stop:,}, line-stops={0.t_line:,}), edges={0.edges:,}',
 			tree.stat_counts() )
 		return tree
 
+	def build_tp_engine(self, tp_tree=None, **tree_opts):
+		if not tp_tree: tp_tree = self.build_tp_tree(**tree_opts)
+		return TBTPRoutingEngine(self.graph, tp_tree, self.conf, timer_func=self.timer_wrapper)
+
+
+
+class TBTPRoutingEngine:
+
+	graph = tree = None
+
+	def __init__(self, graph, tp_tree, conf=None, timer_func=None):
+		self.conf, self.log = conf or EngineConf(), u.get_logger('tb-tp')
+		self.graph, self.tree = graph, tp_tree
+		self.timer_wrapper = timer_func if timer_func else lambda f,*a,**k: func(*a,**k)
 
 	@timer
-	def build_tp_query_graph(self, tp_tree, stop_src, stop_dst):
+	def build_query_tree(self, stop_src, stop_dst):
 		query_tree = t.tp.TPTree(prefix=stop_src)
-		node_src, node_dst = map(query_tree.node, [stop_src, stop_dst])
-		subtree = tp_tree[stop_src]
+		subtree = self.tree[stop_src]
+
 		queue = [(subtree[stop_dst], list())]
 		while queue:
 			queue_prev, queue = queue, list()
@@ -467,12 +481,19 @@ class TBRoutingEngine:
 						queue.append((node_k, path))
 						continue
 
-					# Add path to query_tree, reusing LineStop nodes
+					# Add src->...->dst path to query_tree, reusing LineStop nodes
 					node = query_tree.node(node_k)
-					node_src.edges_to.add(node)
-					for node_next in reversed(path):
+					for node_next in reversed(path): # reverse() because tp_tree has dst->...->src paths
 						node_next = query_tree.node(node_next)
 						node.edges_to.add(node_next)
 						node = node_next
-					node.edges_to.add(node_dst)
+
+		self.log.debug(
+			'Query-tree stats: nodes={0.nodes:,} (unique={0.nodes_unique:,},'
+				' stops={0.t_stop:,}, line-stops={0.t_line:,}), edges={0.edges:,}',
+			query_tree.stat_counts() )
 		return query_tree
+
+
+	def query_profile(self, stop_src, stop_dst, dts_edt, dts_ldt, max_transfers=15):
+		query_tree = self.build_query_tree(stop_src, stop_dst)

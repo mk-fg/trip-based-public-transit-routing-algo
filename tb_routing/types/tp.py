@@ -32,7 +32,7 @@ class TPNode:
 			' out-edges={2}>' ).format(self.seed, self.id, len(self.edges_to))
 
 
-TPTreeStats = namedtuple('TPTreeStats', 'nodes nodes_unique t_src t_dst t_line edges')
+TPTreeStats = namedtuple('TPTreeStats', 'nodes nodes_unique t_src t_stop t_line edges')
 class TPTreeLookupError(Exception): pass
 
 class TPTree:
@@ -65,10 +65,12 @@ class TPTree:
 			If no_path_to node is passed, returned node will never
 				have a path to it, creating another same-k node if necessary.'''
 		assert self.prefix, 'Can only add elements to prefixed subtree'
+		if isinstance(k, TPNode): k = k.value
 		if not t: node_id = TPNodeID.for_k_type(self.prefix, k)
 		else: node_id = TPNodeID(self.prefix, t, k)
+		if not value: value = k
 		if node_id not in self.tree:
-			node = TPNode(value or k, node_id)
+			node = TPNode(value, node_id)
 			self.tree[node_id] = {node.seed: node}
 			self.stats[node_id.t, node_id.k] += 1
 		else:
@@ -78,7 +80,7 @@ class TPTree:
 				for node in node_dict.values():
 					if not self.path_exists(node, no_path_to): break
 				else:
-					node = TPNode(value or k, node_id)
+					node = TPNode(value, node_id)
 					self.tree[node_id][node.seed] = node
 		return node
 
