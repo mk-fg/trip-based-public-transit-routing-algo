@@ -23,7 +23,7 @@ class TBRoutingEngine:
 		if not graph:
 			lines = self.timetable_lines(timetable)
 			transfers = self.precalc_transfer_set(timetable, lines)
-			graph = t.internal.Graph(timetable, lines, transfers)
+			graph = t.base.Graph(timetable, lines, transfers)
 		self.graph = graph
 
 
@@ -63,7 +63,7 @@ class TBRoutingEngine:
 		line_stops = lambda trip: tuple(map(op.attrgetter('stop'), trip))
 		for trip in timetable.trips: line_trips[line_stops(trip)].append(trip)
 
-		lines, progress = t.internal.Lines(), self.progress_iter('lines', len(line_trips))
+		lines, progress = t.base.Lines(), self.progress_iter('lines', len(line_trips))
 		for trips in line_trips.values():
 			progress.send(['line-count={:,}', len(lines)])
 			lines_for_stopseq = list()
@@ -79,7 +79,7 @@ class TBRoutingEngine:
 						break
 					if not trip_a: break
 				else: # failed to find line to group trip into
-					lines_for_stopseq.append(t.internal.Line(trip_a))
+					lines_for_stopseq.append(t.base.Line(trip_a))
 
 			lines.add(*lines_for_stopseq)
 
@@ -98,7 +98,7 @@ class TBRoutingEngine:
 	@timer
 	def _pre_initial_set(self, timetable, lines):
 		'Algorithm 1: Initial transfer computation.'
-		transfers = t.internal.TransferSet()
+		transfers = t.base.TransferSet()
 
 		progress = self.progress_iter('pre-initial-set', len(timetable.trips))
 		for n, trip_t in enumerate(timetable.trips):
@@ -116,7 +116,7 @@ class TBRoutingEngine:
 							line is not lines.line_for_trip(trip_t)
 							or trip_u.compare(trip_t) is t.public.SolutionStatus.non_dominated
 							or j < i ): continue
-						transfers.add(t.internal.Transfer(trip_t[i], trip_u[j], dt_fp))
+						transfers.add(t.base.Transfer(trip_t[i], trip_u[j], dt_fp))
 
 		self.log.debug('Initial transfer set size: {:,}', len(transfers))
 		return transfers
@@ -379,7 +379,7 @@ class TBRoutingEngine:
 		DepartureCriteriaCheck = namedtuple('DCCheck', 'trip stopidx dts_src ts_list')
 		TripSegment = namedtuple('TripSeg', 'trip stopidx_a stopidx_b ts_list')
 
-		tree = t.internal.TPTree() # adj-lists, with nodes being either Stop or Line objects
+		tree = t.tp.TPTree() # adj-lists, with nodes being either Stop or Line objects
 		stop_labels = dict() # {stop: ts_list (all TripStops on the way from stop_src to stop)}
 		trip_tails_checked = dict() # {trip: earliest_checked_stopidx}
 
@@ -440,7 +440,7 @@ class TBRoutingEngine:
 					node = node_dst
 					for ts in reversed(sl):
 						node_prev, node = node, subtree.node(
-							t.internal.LineStop(lines.line_for_trip(ts.trip), ts.stopidx) )
+							t.base.LineStop(lines.line_for_trip(ts.trip), ts.stopidx) )
 						node_prev.edges_to.add(node)
 					node.edges_to.add(node_src)
 
@@ -453,7 +453,7 @@ class TBRoutingEngine:
 
 	@timer
 	def build_tp_query_graph(self, tp_tree, stop_src, stop_dst):
-		query_tree = t.internal.TPTree(prefix=stop_src)
+		query_tree = t.tp.TPTree(prefix=stop_src)
 		node_src, node_dst = map(query_tree.node, [stop_src, stop_dst])
 		subtree = tp_tree[stop_src]
 		queue = [(subtree[stop_dst], list())]
