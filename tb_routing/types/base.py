@@ -105,6 +105,9 @@ class TransferSet:
 		k1 = trip_stop.trip.id, trip_stop.stopidx
 		return self.set_idx.get(k1, dict()).values()
 
+	def earliest_from_trip_to_line_stop(self, trip, ls, dts_dep):
+		raise NotImplementedError # XXX: needed for TBTPRoutingEngine
+
 	def __contains__(self, transfer):
 		k1, k2 = self.set_idx_keys[transfer.id]
 		return bool(self.set_idx.get(k1, dict()).get(k2))

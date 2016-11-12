@@ -496,4 +496,42 @@ class TBTPRoutingEngine:
 
 
 	def query_profile(self, stop_src, stop_dst, dts_edt, dts_ldt, max_transfers=15):
+		import heapq # XXX
+
+		tt, lines, transfers = self.graph
 		query_tree = self.build_query_tree(stop_src, stop_dst)
+
+		# XXX: path, use ts instead of trip + dts_dep
+		NodeLabel = namedtuple('NodeLabel', 'trip n dts_dep')
+
+		dts_dep = 0 # XXX: implementing earliest-arrival first
+		node_labels = defaultdict(list) # XXX: list -> pareto-set (with update method)
+
+		prio_queue = [(query_tree[stop_src], NodeLabel(None, 0, dts_dep))]
+		while prio_queue:
+			node_src, label = heapq.heappop(prio_queue)
+
+			for node in node_src.edges_to:
+				if isinstance(node.value, t.base.LineStop):
+					ls = node.value
+					stop = ls.line.stops[ls.stopidx]
+				else: ls, stop = None, node.value # lineN -> stop_dst
+
+				if not label.trip: # stop_src -> {stop_dst, line1}
+					dts = label.dts_dep + tt.footpaths.time_delta(node_src.value, stop)
+					trip = ( None if not ls # stop_src -> stop_dst
+						else ls.line.earliest_trip(stopidx, label.dts_dep + dt) )
+					node_label = NodeLabel(trip, label.n, dts) # stop_src -> stop_dst
+				elif not ls: # lineN -> stop_dst
+					dts = min(
+						(ts.dts_arr + tt.footpaths.time_delta(ts.stop, stop, u.inf))
+						for ts in label.trip )
+					assert dts < u.inf
+					node_label = NodeLabel(None, label.n, dts) # stop_src -> stop_dst
+				else: # lineN -> lineN+1
+					transfer = transfers.earliest_from_trip_to_line_stop(label.trip, ls, label.dts_dep) # XXX
+					node_label = NodeLabel(transfer.ts_to.trip, label.n+1, transfer.ts_to.dts_dep)
+				if node_labels[node].update(node_label):
+					heqpq.heappush(prio_queue, node_label) # XXX: sort key?
+
+		return node_labels[query_tree[stop_dst]]
