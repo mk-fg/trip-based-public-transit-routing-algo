@@ -105,7 +105,7 @@ def parse_gtfs_timetable(gtfs_dir, conf):
 			log.debug('Missing transfer time value in CSV tuple: {}', t)
 			continue
 		for stop_from, stop_to in it.product(stops_from, stops_to):
-			if stop_from is stop_to: fp_samestop_count += 1
+			if stop_from == stop_to: fp_samestop_count += 1
 			footpaths.add(stop_from, stop_to, int(dt))
 	if not len(footpaths):
 		log.debug('No transfers/links data found, generating synthetic footpaths from lon/lat')

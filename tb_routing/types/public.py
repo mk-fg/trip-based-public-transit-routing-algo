@@ -23,10 +23,11 @@ class SolutionStatus(enum.Enum):
 #  timetable, consisting of a set of stops, a set of footpaths and a set of trips."
 
 
-@u.attr_struct(repr=False)
+@u.attr_struct(repr=False, cmp=False)
 class Stop:
 	keys = 'id name lon lat'
 	def __hash__(self): return hash(self.id)
+	def __eq__(self, stop): return u.same_type_and_id(self, stop)
 	def __repr__(self):
 		if self.id == self.name: return '<Stop {}>'.format(self.id)
 		return '<Stop {} [{}]>'.format(self.name, self.id)
@@ -93,7 +94,7 @@ class Footpaths:
 			for k1,v1 in self.set_idx_to.items():
 				for k2,v in v1.items():
 					dt_sum, dt_count = dt_sum + v, dt_count + 1
-					if k1 is k2: ch_count += 1
+					if k1 == k2: ch_count += 1
 			self._stats_cache = dt_sum, dt_count, ch_count
 		return self._stats_cache
 
@@ -209,7 +210,7 @@ class Journey:
 		return self
 
 	def append_fp(self, stop_from, stop_to, dt):
-		if not (stop_from is stop_to or dt == 0):
+		if not (stop_from == stop_to or dt == 0):
 			self.segments.append(JourneyFp(stop_from, stop_to, dt))
 			self._stats_cache = None
 		return self

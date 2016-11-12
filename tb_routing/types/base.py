@@ -46,6 +46,7 @@ class Line:
 
 	def __getitem__(self, k): return self.set_idx[k]
 	def __hash__(self): return hash(self.id)
+	def __eq__(self, line): return u.same_type_and_id(self, line)
 	def __len__(self): return len(self.set_idx)
 	def __iter__(self): return iter(self.set_idx)
 

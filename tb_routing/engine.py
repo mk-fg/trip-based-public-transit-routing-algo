@@ -113,7 +113,7 @@ class TBRoutingEngine:
 						trip_u = line.earliest_trip(j, dts_q)
 						if not trip_u: continue # all trips for L(q) have departed by dts_q
 						if not (
-							line is not lines.line_for_trip(trip_t)
+							line != lines.line_for_trip(trip_t)
 							or trip_u.compare(trip_t) is t.public.SolutionStatus.non_dominated
 							or j < i ): continue
 						transfers.add(t.base.Transfer(trip_t[i], trip_u[j], dt_fp))
@@ -130,7 +130,7 @@ class TBRoutingEngine:
 				ts_t = transfer.ts_from.trip[transfer.ts_from.stopidx-1]
 				ts_u = transfer.ts_to.trip[transfer.ts_to.stopidx+1]
 			except IndexError: continue # transfers from-start/to-end of t/u trips
-			if ts_t.stop is ts_u.stop:
+			if ts_t.stop == ts_u.stop:
 				try: dt_ch = footpaths.time_delta(ts_t.stop, ts_t.stop)
 				except KeyError: continue
 				if ts_t.dts_arr + dt_ch <= ts_u.dts_dep:
@@ -251,7 +251,7 @@ class TBRoutingEngine:
 
 		lines_to_dst = dict() # {trip: (i, line, dt)}
 		for stop_q, dt_fp in timetable.footpaths.from_stops_to(stop_dst):
-			if stop_q is stop_dst: dt_fp = 0
+			if stop_q == stop_dst: dt_fp = 0
 			for i, line in lines.lines_with_stop(stop_q):
 				for trip in line: lines_to_dst.setdefault(trip, list()).append((i, line, dt_fp))
 		for line_infos in lines_to_dst.values(): # so that all "i > b" come up first
@@ -259,9 +259,9 @@ class TBRoutingEngine:
 
 		# Queue initial set of trips (reachable from stop_src) to examine
 		for stop_q, dt_fp in timetable.footpaths.to_stops_from(stop_src):
-			if stop_q is stop_src: dt_fp = 0
+			if stop_q == stop_src: dt_fp = 0
 			dts_q, jtrips = dts_src + dt_fp, list()
-			if stop_q is stop_dst:
+			if stop_q == stop_dst:
 				results.append(jtrips)
 				continue # can't be beaten on time or transfers - can only be extended
 			for i, line in lines.lines_with_stop(stop_q):
@@ -317,7 +317,7 @@ class TBRoutingEngine:
 
 		lines_to_dst = dict() # {trip: (i, line, dt)}
 		for stop_q, dt_fp in timetable.footpaths.from_stops_to(stop_dst):
-			if stop_q is stop_dst: dt_fp = 0
+			if stop_q == stop_dst: dt_fp = 0
 			for i, line in lines.lines_with_stop(stop_q):
 				for trip in line: lines_to_dst.setdefault(trip, list()).append((i, line, dt_fp))
 		for line_infos in lines_to_dst.values(): # so that all "i > b" come up first
@@ -325,7 +325,7 @@ class TBRoutingEngine:
 
 		profile_queue = list()
 		for stop_q, dt_fp in timetable.footpaths.to_stops_from(stop_src):
-			if stop_q is stop_src: dt_fp = 0
+			if stop_q == stop_src: dt_fp = 0
 			# XXX: special fp-only journeys that work anytime
 			for i, line in lines.lines_with_stop(stop_q):
 				for trip in line:
@@ -403,7 +403,7 @@ class TBRoutingEngine:
 
 			profile_queue = list()
 			for stop_q, dt_fp in timetable.footpaths.to_stops_from(stop_src):
-				if stop_q is stop_src: dt_fp = 0
+				if stop_q == stop_src: dt_fp = 0
 				for i, line in lines.lines_with_stop(stop_q):
 					for trip in line:
 						profile_queue.append(DepartureCriteriaCheck(trip, i, trip[i].dts_dep - dt_fp, list()))
@@ -474,7 +474,7 @@ class TBTPRoutingEngine:
 				path += [node]
 				for k in node.edges_to:
 					node_k = subtree[k]
-					if node_k.value is not stop_src:
+					if node_k.value != stop_src:
 						queue.append((node_k, path))
 						continue
 
@@ -485,11 +485,11 @@ class TBTPRoutingEngine:
 						node.edges_to.add(node_next)
 						node = node_next
 
+		qt_stats = query_tree.stat_counts()
 		self.log.debug(
 			'Query-tree stats: nodes={0.nodes:,} (unique={0.nodes_unique:,},'
-				' stops={0.t_stop:,}, line-stops={0.t_line:,}), edges={0.edges:,}',
-			query_tree.stat_counts() )
-		return query_tree
+				' stops={0.t_stop:,}, line-stops={0.t_line:,}), edges={0.edges:,}', qt_stats )
+		return query_tree if qt_stats.nodes > 0 else None
 
 
 	def query_profile(self, stop_src, stop_dst, dts_edt, dts_ldt, max_transfers=15):
@@ -497,6 +497,7 @@ class TBTPRoutingEngine:
 		#  Shortest Paths in Time-Dependent Train Networks" paper
 		tt, lines, transfers = self.graph
 		query_tree = self.build_query_tree(stop_src, stop_dst)
+		if not query_tree: return list()
 
 		# XXX: add path-list attr to resolve it into journey
 		NodeLabel = namedtuple('NodeLabel', 'ts n')
@@ -515,7 +516,7 @@ class TBTPRoutingEngine:
 			node_src, label_src = prio_queue.pop()
 
 			for node in node_src.edges_to:
-				if node.value is not stop_dst:
+				if node.value != stop_dst:
 					ls = node.value
 					stop = ls.line.stops[ls.stopidx]
 				else: ls, stop = None, node.value # ... -> stop_dst
@@ -538,11 +539,11 @@ class TBTPRoutingEngine:
 							for ts in label_src.ts.trip[label_src.ts.stopidx+1:]
 							for transfer in transfers.from_trip_stop(ts)
 							if transfer.ts_to.stopidx == ls.stopidx
-								and lines.line_for_trip(transfer.ts_to.trip) is ls.line ),
+								and lines.line_for_trip(transfer.ts_to.trip) == ls.line ),
 						key=op.attrgetter('ts_to.dts_arr') )
 					node_label = NodeLabel(transfer.ts_to, label.n+1)
 
 				if node_labels[node].add(node_label):
 					prio_queue.push(NodeLabelCheck(node, node_label))
 
-		return node_labels[query_tree[stop_dst]]
+		return list(node_labels[query_tree[stop_dst]])

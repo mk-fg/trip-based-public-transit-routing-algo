@@ -70,6 +70,9 @@ def init_if_none(v, default):
 	if v is None: v = default() if callable(default) else v
 	return v
 
+def same_type_and_id(v1, v2):
+	return type(v1) is type(v2) and v1.id == v2.id
+
 inf = float('inf')
 
 
@@ -90,18 +93,3 @@ def pickle_load(name=use_pickle_cache or 'state.pickle', fail=False):
 			return pickle.load(src)
 	except Exception as err:
 		if fail: raise
-
-
-class IDList(UserList):
-	'''Easily-mutable list with element
-		values compared by their id() instead of equality.'''
-	def index(self, v):
-		for n, v2 in enumerate(self.data):
-			if v is v2: return n
-		raise ValueError(v)
-	def remove(self, v): self.data.pop(self.index(v))
-	def __contains__(self, v):
-		try: self.index(v)
-		except ValueError: return False
-		else: return True
-	def __iter__(self): return iter(list(self.data))
