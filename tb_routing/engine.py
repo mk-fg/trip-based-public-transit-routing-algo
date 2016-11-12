@@ -378,6 +378,7 @@ class TBRoutingEngine:
 
 		DepartureCriteriaCheck = namedtuple('DCCheck', 'trip stopidx dts_src ts_list')
 		TripSegment = namedtuple('TripSeg', 'trip stopidx_a stopidx_b ts_list')
+		StopLabelSet = ft.partial(t.tp.BiCriteriaParetoSet, lambda v: (v[-1].dts_arr, len(v) - 1))
 
 		tree = t.tp.TPTree() # adj-lists, with nodes being either Stop or Line objects
 		stop_labels = dict() # {stop: ts_list (all TripStops on the way from stop_src to stop)}
@@ -422,21 +423,17 @@ class TBRoutingEngine:
 							# Update labels for all stops reachable from this TripStop
 							for stop_q, dt_fp in timetable.footpaths.to_stops_from(ts.stop):
 								stop_q_arr = ts.dts_arr + dt_fp
-								ts_labels = stop_labels.setdefault(stop_q, u.IDList())
-								for sl in ts_labels:
-									sl_dts_arr, sl_n = sl[-1].dts_arr, len(sl) - 1
-									if stop_q_arr >= sl_dts_arr and n >= sl_n: break # dominated
-									if stop_q_arr <= sl_dts_arr and n <= sl_n: ts_labels.remove(sl) # dominates
-								else: ts_labels.append(ts_list) # nondominated
+								if stop_q not in stop_labels: stop_labels[stop_q] = StopLabelSet()
+								stop_labels[stop_q].add(ts_list)
 
 							for transfer in transfers.from_trip_stop(ts):
 								enqueue(transfer.ts_to.trip, transfer.ts_to.stopidx, ts_list)
 
 			subtree = tree[stop_src]
 			node_src = subtree.node(stop_src, t='src')
-			for stop_dst, sl_list in stop_labels.items():
+			for stop_dst, sl_set in stop_labels.items():
 				node_dst = subtree.node(stop_dst)
-				for sl in sl_list:
+				for sl in sl_set:
 					node = node_dst
 					for ts in reversed(sl):
 						node_prev, node = node, subtree.node(
@@ -496,42 +493,56 @@ class TBTPRoutingEngine:
 
 
 	def query_profile(self, stop_src, stop_dst, dts_edt, dts_ldt, max_transfers=15):
-		import heapq # XXX
-
+		# XXX: algo optimizations from "Multi-criteria
+		#  Shortest Paths in Time-Dependent Train Networks" paper
 		tt, lines, transfers = self.graph
 		query_tree = self.build_query_tree(stop_src, stop_dst)
 
-		# XXX: path, use ts instead of trip + dts_dep
-		NodeLabel = namedtuple('NodeLabel', 'trip n dts_dep')
+		# XXX: add path-list attr to resolve it into journey
+		NodeLabel = namedtuple('NodeLabel', 'ts n')
+		NodeLabelCheck = namedtuple('NodeLabelChk', 'node label')
 
-		dts_dep = 0 # XXX: implementing earliest-arrival first
-		node_labels = defaultdict(list) # XXX: list -> pareto-set (with update method)
+		# XXX: implementing earliest-arrival first
+		# XXX: for profile query, will need dts_dep in labels and +1 loop
+		dts_dep_src = 0
+		node_labels = defaultdict(ft.partial(t.tp.BiCriteriaParetoSet, 'ts.dts_arr n'))
 
-		prio_queue = [(query_tree[stop_src], NodeLabel(None, 0, dts_dep))]
+		prio_queue = t.tp.PrioQueue('label.ts.dts_arr label.n')
+		prio_queue.push(NodeLabelCheck( query_tree[stop_src],
+			NodeLabel(t.public.TripStop.dummy_for_stop(stop_src, dts_dep=dts_dep_src), 0) ))
+
 		while prio_queue:
-			node_src, label = heapq.heappop(prio_queue)
+			node_src, label_src = prio_queue.pop()
 
 			for node in node_src.edges_to:
-				if isinstance(node.value, t.base.LineStop):
+				if node.value is not stop_dst:
 					ls = node.value
 					stop = ls.line.stops[ls.stopidx]
-				else: ls, stop = None, node.value # lineN -> stop_dst
+				else: ls, stop = None, node.value # ... -> stop_dst
 
-				if not label.trip: # stop_src -> {stop_dst, line1}
-					dts = label.dts_dep + tt.footpaths.time_delta(node_src.value, stop)
-					trip = ( None if not ls # stop_src -> stop_dst
-						else ls.line.earliest_trip(stopidx, label.dts_dep + dt) )
-					node_label = NodeLabel(trip, label.n, dts) # stop_src -> stop_dst
+				if not label_src.ts.trip: # stop_src -> {stop_dst or line1}
+					dts = label_src.ts.dts_dep + tt.footpaths.time_delta(node_src.value, stop)
+					ts = NodeLabel(t.public.TripStop.dummy_for_stop(stop, dts_arr=dts), 0)\
+						if not ls else ls.line.earliest_trip(ls.stopidx, dts)[ls.stopidx]
+					node_label = NodeLabel(ts, label_src.n)
 				elif not ls: # lineN -> stop_dst
 					dts = min(
 						(ts.dts_arr + tt.footpaths.time_delta(ts.stop, stop, u.inf))
-						for ts in label.trip )
-					assert dts < u.inf
-					node_label = NodeLabel(None, label.n, dts) # stop_src -> stop_dst
+						for ts in label_src.ts.trip[label_src.ts.stopidx+1:] )
+					assert dts < u.inf # must be at least one, otherwise tp_tree is wrong
+					node_label = NodeLabel(
+						t.public.TripStop.dummy_for_stop(stop, dts_arr=dts), label_src.n )
 				else: # lineN -> lineN+1
-					transfer = transfers.earliest_from_trip_to_line_stop(label.trip, ls, label.dts_dep) # XXX
-					node_label = NodeLabel(transfer.ts_to.trip, label.n+1, transfer.ts_to.dts_dep)
-				if node_labels[node].update(node_label):
-					heqpq.heappush(prio_queue, node_label) # XXX: sort key?
+					transfer = min(
+						( transfer
+							for ts in label_src.ts.trip[label_src.ts.stopidx+1:]
+							for transfer in transfers.from_trip_stop(ts)
+							if transfer.ts_to.stopidx == ls.stopidx
+								and lines.line_for_trip(transfer.ts_to.trip) is ls.line ),
+						key=op.attrgetter('ts_to.dts_arr') )
+					node_label = NodeLabel(transfer.ts_to, label.n+1)
+
+				if node_labels[node].add(node_label):
+					prio_queue.push(NodeLabelCheck(node, node_label))
 
 		return node_labels[query_tree[stop_dst]]

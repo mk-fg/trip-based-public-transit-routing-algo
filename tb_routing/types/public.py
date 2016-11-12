@@ -116,7 +116,8 @@ class TripStop:
 	dts_dep = u.attr_init(convert=trip_stop_daytime)
 
 	@classmethod
-	def dummy_for_stop(cls, stop): return cls(None, 0, stop, 0, 0)
+	def dummy_for_stop(cls, stop, dts_arr=0, dts_dep=0):
+		return cls(None, 0, stop, dts_arr, dts_dep)
 
 	def __hash__(self): return hash((self.trip, self.stopidx))
 	def __repr__(self): # mostly to avoid recursion

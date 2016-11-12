@@ -101,8 +101,8 @@ class TransferSet:
 		self.set_idx[k1][k2] = transfer
 		self.set_idx_keys[transfer.id] = k1, k2
 
-	def from_trip_stop(self, trip_stop):
-		k1 = trip_stop.trip.id, trip_stop.stopidx
+	def from_trip_stop(self, ts):
+		k1 = ts.trip.id, ts.stopidx
 		return self.set_idx.get(k1, dict()).values()
 
 	def earliest_from_trip_to_line_stop(self, trip, ls, dts_dep):
