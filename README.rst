@@ -12,8 +12,10 @@ following papers:
 - Trip-Based Public Transit Routing Using Condensed Search Trees
   (`arXiv:1607.01299v2`_, 2016)
 
-...with source data parsed from `GTFS feeds
+...with source data parsed (by cli script) from `GTFS feeds
 <https://developers.google.com/transit/gtfs/>`_.
+
+See "Links" section below for more references.
 
 Not focused on performance, only readability and correctness aspects,
 i.e. just a proof of concept, not suitable for any kind of production use.
@@ -289,6 +291,18 @@ Papers/docs directly related to this project:
 
 - Trip-Based Public Transit Routing Using Condensed Search Trees
   (`arXiv:1607.01299v2`_, 2016)
+
+  This paper relies heavily on algorithms and concepts described in:
+
+  - Fast Routing in Very Large Public Transportation Networks using Transfer Patterns
+    (`ACM id 1888969 <https://dl.acm.org/citation.cfm?id=1888969&preflayout=flat>`_,
+    `transferpatterns.pdf <http://ad.informatik.uni-freiburg.de/files/transferpatterns.pdf>`_, 2010)
+
+  - Multi-criteria Shortest Paths in Time-Dependent Train Networks
+    (`ACM id 1788914 <https://dl.acm.org/citation.cfm?id=1788914&preflayout=flat>`_,
+    `DisserMullerHannemannEtal2008.pdf
+    <https://www.coga.tu-berlin.de/fileadmin/i26/download/AG_DiskAlg/FG_KombOptGraphAlg/paper/2008/DisserMullerHannemannEtal2008.pdf>`_,
+    2008)
 
 - `General Transit Feed Specification (GTFS) format info
   <https://developers.google.com/transit/gtfs/>`_
