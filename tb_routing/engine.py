@@ -495,24 +495,20 @@ class TBTPRoutingEngine:
 
 
 	def query_profile(self, stop_src, stop_dst, dts_edt, dts_ldt, max_transfers=15):
-		# XXX: algo optimizations from "Multi-criteria
-		#  Shortest Paths in Time-Dependent Train Networks" paper
 		tt, lines, transfers = self.graph
 		query_tree = self.build_query_tree(stop_src, stop_dst)
 		if not query_tree: return list()
 
-		# XXX: add path-list attr to resolve it into journey
-		NodeLabel = namedtuple('NodeLabel', 'ts n')
+		NodeLabel = namedtuple('NodeLabel', 'ts n journey')
 		NodeLabelCheck = namedtuple('NodeLabelChk', 'node label')
 
-		# XXX: implementing earliest-arrival first
 		# XXX: for profile query, will need dts_dep in labels and +1 loop
 		dts_dep_src = 0
 		node_labels = defaultdict(ft.partial(t.pareto.ParetoSet, 'ts.dts_arr n'))
 
 		prio_queue = t.pareto.PrioQueue('label.ts.dts_arr label.n')
 		prio_queue.push(NodeLabelCheck( query_tree[stop_src],
-			NodeLabel(t.public.TripStop.dummy_for_stop(stop_src, dts_dep=dts_dep_src), 0) ))
+			NodeLabel(t.public.TripStop.dummy_for_stop(stop_src, dts_dep=dts_dep_src), 0, list()) ))
 
 		while prio_queue:
 			node_src, label_src = prio_queue.pop()
@@ -527,14 +523,15 @@ class TBTPRoutingEngine:
 					dts = label_src.ts.dts_dep + tt.footpaths.time_delta(node_src.value, stop)
 					ts = NodeLabel(t.public.TripStop.dummy_for_stop(stop, dts_arr=dts), 0)\
 						if not ls else ls.line.earliest_trip(ls.stopidx, dts)[ls.stopidx]
-					node_label = NodeLabel(ts, label_src.n)
+					node_label = NodeLabel(ts, label_src.n, list())
 				elif not ls: # lineN -> stop_dst
 					dts = min(
 						(ts.dts_arr + tt.footpaths.time_delta(ts.stop, stop, u.inf))
 						for ts in label_src.ts.trip[label_src.ts.stopidx+1:] )
 					assert dts < u.inf # must be at least one, otherwise tp_tree is wrong
 					node_label = NodeLabel(
-						t.public.TripStop.dummy_for_stop(stop, dts_arr=dts), label_src.n )
+						t.public.TripStop.dummy_for_stop(stop, dts_arr=dts),
+						label_src.n, label_src.journey )
 				else: # lineN -> lineN+1
 					transfer = min(
 						( transfer
@@ -543,9 +540,11 @@ class TBTPRoutingEngine:
 							if transfer.ts_to.stopidx == ls.stopidx
 								and lines.line_for_trip(transfer.ts_to.trip) == ls.line ),
 						key=op.attrgetter('ts_to.dts_arr') )
-					node_label = NodeLabel(transfer.ts_to, label.n+1)
+					node_label = NodeLabel( transfer.ts_to,
+						label_src.n+1, label_src.journey + [transfer.ts_to.trip] )
 
 				if node_labels[node].add(node_label):
 					prio_queue.push(NodeLabelCheck(node, node_label))
 
+		# XXX: jtrips_to_journey
 		return list(node_labels[query_tree[stop_dst]])

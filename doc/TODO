@@ -3,6 +3,9 @@
 
 - Implement profile queries optimization from the arXiv:1607.01299v2 paper.
 
+- Implement optimizations of shortest-path algo from arXiv:1607.01299v2 paper,
+  based on "Multi-criteria Shortest Paths in Time-Dependent Train Networks" paper.
+
 - Implement special-case "direct footpath" result of in profile queries.
 
   Doesn't seem to fit nicely into these, as it can depart/arrive anytime and
