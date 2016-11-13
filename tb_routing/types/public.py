@@ -274,6 +274,7 @@ class JourneySet:
 
 	def add(self, journey, dts_dep_criteria=True):
 		'''Add Journey, maintaining pareto-optimality of the set.'''
+		# XXX: remove this - either use ParetoSet here or for raw QueryResults
 		for jn2 in list(self.journeys):
 			ss = journey.compare(jn2)
 			if ss is SolutionStatus.dominated or ss is SolutionStatus.equal: break

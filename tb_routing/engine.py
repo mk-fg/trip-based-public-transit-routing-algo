@@ -238,7 +238,7 @@ class TBRoutingEngine:
 		timetable, lines, transfers = self.graph
 
 		TripSegment = namedtuple('TripSeg', 'trip stopidx_a stopidx_b journey')
-		results = t.pareto.BiCriteriaParetoSet('dts_arr n')
+		results = t.pareto.QueryResultParetoSet()
 		R, Q = dict(), dict()
 
 		def enqueue(trip, i, n, jtrips, _ss=t.public.SolutionStatus):
@@ -303,9 +303,7 @@ class TBRoutingEngine:
 		DepartureCriteriaCheck = namedtuple('DCCheck', 'trip stopidx dts_src journey')
 		TripSegment = namedtuple('TripSeg', 'trip stopidx_a stopidx_b journey')
 
-		# results is not a BiCriteriaParetoSet here, as it requires additional dts_dep criteria
-		# Suboptimal results are filtered-out later in JourneySet.add() based on that
-		results = list()
+		results = t.pareto.QueryResultParetoSet()
 		R, Q = dict(), dict()
 
 		def enqueue(trip, i, n, jtrips, _ss=t.public.SolutionStatus):
@@ -353,7 +351,7 @@ class TBRoutingEngine:
 						line_dts_dst = trip[i_dst].dts_arr + dt_fp
 						if line_dts_dst < t_min:
 							t_min_idx[n] = line_dts_dst
-							results.append(t.base.QueryResult(line_dts_dst, n, jtrips + [trip]))
+							results.add(t.base.QueryResult(line_dts_dst, n, jtrips + [trip], dts_src))
 
 					# Check if trip can lead to nondominated journeys, and queue trips reachable from it
 					for i in range(b+1, e+1): # b < i <= e
@@ -381,7 +379,7 @@ class TBRoutingEngine:
 
 		DepartureCriteriaCheck = namedtuple('DCCheck', 'trip stopidx dts_src ts_list')
 		TripSegment = namedtuple('TripSeg', 'trip stopidx_a stopidx_b ts_list')
-		StopLabelSet = ft.partial(t.pareto.BiCriteriaParetoSet, lambda v: (v[-1].dts_arr, len(v) - 1))
+		StopLabelSet = ft.partial(t.pareto.ParetoSet, lambda v: (v[-1].dts_arr, len(v) - 1))
 
 		tree = t.tp.TPTree() # adj-lists, with nodes being either Stop or Line objects
 		stop_labels = dict() # {stop: ts_list (all TripStops on the way from stop_src to stop)}
@@ -510,7 +508,7 @@ class TBTPRoutingEngine:
 		# XXX: implementing earliest-arrival first
 		# XXX: for profile query, will need dts_dep in labels and +1 loop
 		dts_dep_src = 0
-		node_labels = defaultdict(ft.partial(t.pareto.BiCriteriaParetoSet, 'ts.dts_arr n'))
+		node_labels = defaultdict(ft.partial(t.pareto.ParetoSet, 'ts.dts_arr n'))
 
 		prio_queue = t.pareto.PrioQueue('label.ts.dts_arr label.n')
 		prio_queue.push(NodeLabelCheck( query_tree[stop_src],

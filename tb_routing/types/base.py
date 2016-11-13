@@ -131,5 +131,8 @@ class Graph:
 class QueryResult:
 	'''Internal query result, containing only an
 			optimal list of Trips to take, later resolved into a Journey.
-		Use in BiCriteriaParetoSets to discard some of these early.'''
-	keys = 'dts_arr n jtrips'
+		Used in ParetoSets to discard some of these results early.'''
+	dts_arr = u.attr_init()
+	n = u.attr_init()
+	jtrips = u.attr_init()
+	dts_dep = u.attr_init(0)

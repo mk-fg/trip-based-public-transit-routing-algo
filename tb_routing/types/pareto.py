@@ -41,22 +41,35 @@ class PrioQueue:
 	def peek(self): return self.items[0].value
 
 
-class BiCriteriaParetoSet:
+class ParetoSet:
+	'''ParetoSet with 2 or 3 criterias.
+		First two are min-optimal, but the last one is maximized, if used.
+		Designed to be used with arrival-time,
+			transfer-count, and - for profile queries - departure-time criterias.'''
 
 	def __init__(self, *dts_n_attrs):
 		self.items, self.item_func = list(), PrioItem.get_factory(dts_n_attrs)
+
+	def get_criterias(self, item):
+		c1, c2 = item.prio[:2]
+		c3 = item.prio[2] if len(item.prio) > 2 else 0 # always 0 for bi-criteria sets
+		return c1, c2, c3
 
 	def add(self, value):
 		'''Check if value is pareto-optimal, and if so, add it
 			to the set, remove and dominated values and return True.'''
 		item = self.item_func(value)
-		item_c1, item_c2 = item.prio
+		item_c1, item_c2, item_c3 = self.get_criterias(item)
 		for item_chk in list(self.items):
-			c1, c2 = item_chk.prio
-			if item_c1 >= c1 and item_c2 >= c2: break # dominated
-			if item_c1 <= c1 and item_c2 <= c2: self.items.remove(item_chk) # dominates
+			c1, c2, c3 = self.get_criterias(item_chk)
+			if item_c1 >= c1 and item_c2 >= c2 and item_c3 <= c3: break # dominated
+			if item_c1 <= c1 and item_c2 <= c2 and item_c3 >= c3: self.items.remove(item_chk) # dominates
 		else:
 			self.items.append(item) # nondominated
 			return True
 
 	def __iter__(self): return iter(map(op.attrgetter('value'), self.items))
+
+
+# Special-case ParetoSet used for common QueryResult values
+QueryResultParetoSet = ft.partial(ParetoSet, 'dts_arr n dts_dep')
