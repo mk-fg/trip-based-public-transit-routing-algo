@@ -417,8 +417,9 @@ class TBRoutingEngine:
 					if not queue: break
 					queue_prev, queue = queue, list()
 					for trip, b, e, ts_list in queue_prev:
+						ts_list += [trip[b]] # trip[b] is transfer.ts_to - internal tree node
 						for i in range(b+1, e+1): # b < i <= e
-							ts, ts_list = trip[i], ts_list + [trip[i]]
+							ts = trip[i]
 
 							# Update labels for all stops reachable from this TripStop
 							for stop_q, dt_fp in timetable.footpaths.to_stops_from(ts.stop):
@@ -437,7 +438,7 @@ class TBRoutingEngine:
 					node = node_dst
 					for ts in reversed(sl):
 						node_prev, node = node, subtree.node(
-							t.base.LineStop(lines.line_for_trip(ts.trip), ts.stopidx) )
+							t.base.LineStop(lines.line_for_trip(ts.trip), ts.stopidx), no_path_to=node )
 						node_prev.edges_to.add(node)
 					node.edges_to.add(node_src)
 
