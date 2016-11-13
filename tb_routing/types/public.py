@@ -61,8 +61,9 @@ class Footpaths:
 		self._stats_cache = None
 
 	def discard_longer(self, dt_max):
-		items = list(sorted( (v,(k1,k2))
-			for k1,v1 in self.set_idx_to.items() for k2,v in v1.items() ))
+		items = sorted(
+			((v,(k1,k2)) for k1,v1 in self.set_idx_to.items() for k2,v in v1.items()),
+			key=op.itemgetter(0) )
 		n = bisect.bisect_left(items, (dt_max, ()))
 		for v,(k1,k2) in items[n:]:
 			try:
