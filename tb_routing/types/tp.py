@@ -136,6 +136,7 @@ class PrioItem:
 class PrioQueue:
 	def __init__(self, *prio_attrs):
 		self.items, self.item_func = list(), PrioItem.get_factory(prio_attrs)
+	def __len__(self): return len(self.items)
 	def push(self, value): heapq.heappush(self.items, self.item_func(value))
 	def pop(self): return heapq.heappop(self.items).value
 	def peek(self): return self.items[0].value
