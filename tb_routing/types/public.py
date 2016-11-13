@@ -123,8 +123,9 @@ class TripStop:
 	def __hash__(self): return hash((self.trip, self.stopidx))
 	def __repr__(self): # mostly to avoid recursion
 		return ( 'TripStop('
-			'trip_id={0.trip.id}, stopidx={0.stopidx}, stop_id={0.stop.id},'
-			' dts_arr={0.dts_arr}, dts_dep={0.dts_dep})' ).format(self)
+				'trip_id={trip_id}, stopidx={0.stopidx}, stop_id={0.stop.id},'
+				' dts_arr={0.dts_arr}, dts_dep={0.dts_dep})' )\
+			.format(self, trip_id=self.trip.id if self.trip else None)
 
 @u.attr_struct
 class Trip:
