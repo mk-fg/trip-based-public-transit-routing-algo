@@ -262,6 +262,9 @@ profile:
         - [C, '12:30', '12:40']
         - [D, '13:00', x]
 
+    footpaths:
+      - [A, D, 120] # direct footpath, longer than most trips
+
   goal: [A, D, '9:00', '14:00']
 
   journey_set:
@@ -279,3 +282,7 @@ profile:
       stats: ['9:20', '14:00']
       segments:
         direct-trip: [trip, A, D]
+    direct-footpath:
+      stats: ['9:00', '11:00']
+      segments:
+        direct-trip: [fp, A, D]

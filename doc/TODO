@@ -6,11 +6,6 @@
 - Implement optimizations of shortest-path algo from arXiv:1607.01299v2 paper,
   based on "Multi-criteria Shortest Paths in Time-Dependent Train Networks" paper.
 
-- Implement special-case "direct footpath" result of in profile queries.
-
-  Doesn't seem to fit nicely into these, as it can depart/arrive anytime and
-  beats all other options on trip/transfer count.
-
 - Some interactive querying interface for the thing would be nice to have - can
   be simple WebUI or something like ipynb.
 

@@ -327,7 +327,11 @@ class TBRoutingEngine:
 		profile_queue = list()
 		for stop_q, dt_fp in timetable.footpaths.to_stops_from(stop_src):
 			if stop_q == stop_src: dt_fp = 0
-			# XXX: special fp-only journeys that work anytime
+			if stop_q == stop_dst:
+				# Direct src-to-dst footpath can't be easily compared to
+				#  other results, as it has no fixed departure/arrival times,
+				#  hence added here as special "exceptional" one.
+				results.add_exception(t.base.QueryResult(None, 0, list()))
 			for i, line in lines.lines_with_stop(stop_q):
 				for trip in line:
 					dts_trip = trip[i].dts_dep

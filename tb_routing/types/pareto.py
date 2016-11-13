@@ -48,7 +48,8 @@ class ParetoSet:
 			transfer-count, and - for profile queries - departure-time criterias.'''
 
 	def __init__(self, *dts_n_attrs):
-		self.items, self.item_func = list(), PrioItem.get_factory(dts_n_attrs)
+		self.items, self.items_exc = list(), list()
+		self.item_func = PrioItem.get_factory(dts_n_attrs)
 
 	def get_criterias(self, item):
 		c1, c2 = item.prio[:2]
@@ -68,7 +69,16 @@ class ParetoSet:
 			self.items.append(item) # nondominated
 			return True
 
-	def __iter__(self): return iter(map(op.attrgetter('value'), self.items))
+	def add_exception(self, value):
+		'''Add value that should not be compared to anything and will always be in the set.
+			Example for such special cases are footpath-only
+				journeys in profile queries that have no fixed arrival/departure times,
+				hence can't really be compared to other results.'''
+		self.items_exc.append(value)
+
+	def __len__(self): return len(self.items) + len(self.items_exc)
+	def __iter__(self):
+		return iter(it.chain(map(op.attrgetter('value'), self.items), self.items_exc))
 
 
 # Special-case ParetoSet used for common QueryResult values
