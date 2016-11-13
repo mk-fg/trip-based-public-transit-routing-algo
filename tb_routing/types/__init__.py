@@ -1,1 +1,1 @@
-from . import public, base, tp
+from . import public, base, tp, pareto

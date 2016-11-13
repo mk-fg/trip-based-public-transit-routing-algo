@@ -378,7 +378,7 @@ class TBRoutingEngine:
 
 		DepartureCriteriaCheck = namedtuple('DCCheck', 'trip stopidx dts_src ts_list')
 		TripSegment = namedtuple('TripSeg', 'trip stopidx_a stopidx_b ts_list')
-		StopLabelSet = ft.partial(t.tp.BiCriteriaParetoSet, lambda v: (v[-1].dts_arr, len(v) - 1))
+		StopLabelSet = ft.partial(t.pareto.BiCriteriaParetoSet, lambda v: (v[-1].dts_arr, len(v) - 1))
 
 		tree = t.tp.TPTree() # adj-lists, with nodes being either Stop or Line objects
 		stop_labels = dict() # {stop: ts_list (all TripStops on the way from stop_src to stop)}
@@ -507,9 +507,9 @@ class TBTPRoutingEngine:
 		# XXX: implementing earliest-arrival first
 		# XXX: for profile query, will need dts_dep in labels and +1 loop
 		dts_dep_src = 0
-		node_labels = defaultdict(ft.partial(t.tp.BiCriteriaParetoSet, 'ts.dts_arr n'))
+		node_labels = defaultdict(ft.partial(t.pareto.BiCriteriaParetoSet, 'ts.dts_arr n'))
 
-		prio_queue = t.tp.PrioQueue('label.ts.dts_arr label.n')
+		prio_queue = t.pareto.PrioQueue('label.ts.dts_arr label.n')
 		prio_queue.push(NodeLabelCheck( query_tree[stop_src],
 			NodeLabel(t.public.TripStop.dummy_for_stop(stop_src, dts_dep=dts_dep_src), 0) ))
 
