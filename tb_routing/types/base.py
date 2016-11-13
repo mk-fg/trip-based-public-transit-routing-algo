@@ -125,3 +125,11 @@ class TransferSet:
 class Graph:
 	keys = 'timetable lines transfers'
 	def __iter__(self): return iter(u.attr.astuple(self, recurse=False))
+
+
+@u.attr_struct
+class QueryResult:
+	'''Internal query result, containing only an
+			optimal list of Trips to take, later resolved into a Journey.
+		Use in BiCriteriaParetoSets to discard some of these early.'''
+	keys = 'dts_arr n jtrips'

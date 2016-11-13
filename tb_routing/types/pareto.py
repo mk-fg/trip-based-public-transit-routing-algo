@@ -1,4 +1,4 @@
-### TBRoutingEngine internal types - pareto-set / multicriteria-prio-queue and related stuff
+### TBRoutingEngine internal types - pareto-optimization stuff
 ### Mostly used for results and labels in engine algos
 
 import itertools as it, operator as op, functools as ft

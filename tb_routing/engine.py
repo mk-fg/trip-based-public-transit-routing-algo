@@ -181,12 +181,13 @@ class TBRoutingEngine:
 
 
 	def jtrips_to_journeys(self, stop_src, stop_dst, dts_src, results, dts_dep_criteria=False):
-		'Convert lists of trips to JourneySet with proper journey descriptions.'
+		'Convert list/set of QueryResults to JourneySet with proper journey descriptions.'
 		JourneySoFar = namedtuple('JSF', 'ts_src journey prio') # unfinished journey up to ts_src
 		get_dt_fp = ft.partial(self.graph.timetable.footpaths.time_delta, default=u.inf)
 
 		journeys = t.public.JourneySet()
-		for jtrips in results:
+		for result in results:
+			jtrips = result.jtrips
 			queue = [JourneySoFar(
 				t.public.TripStop.dummy_for_stop(stop_src),
 				t.public.Journey(dts_src), prio=0 )]
@@ -237,7 +238,7 @@ class TBRoutingEngine:
 		timetable, lines, transfers = self.graph
 
 		TripSegment = namedtuple('TripSeg', 'trip stopidx_a stopidx_b journey')
-		results = list()
+		results = t.pareto.BiCriteriaParetoSet('dts_arr n')
 		R, Q = dict(), dict()
 
 		def enqueue(trip, i, n, jtrips, _ss=t.public.SolutionStatus):
@@ -262,7 +263,7 @@ class TBRoutingEngine:
 			if stop_q == stop_src: dt_fp = 0
 			dts_q, jtrips = dts_src + dt_fp, list()
 			if stop_q == stop_dst:
-				results.append(jtrips)
+				results.add(t.base.QueryResult(dts_q, 0, jtrips))
 				continue # can't be beaten on time or transfers - can only be extended
 			for i, line in lines.lines_with_stop(stop_q):
 				trip = line.earliest_trip(i, dts_q)
@@ -279,7 +280,7 @@ class TBRoutingEngine:
 					line_dts_dst = trip[i_dst].dts_arr + dt_fp
 					if line_dts_dst < t_min:
 						t_min = line_dts_dst
-						results.append(jtrips + [trip])
+						results.add(t.base.QueryResult(line_dts_dst, n, jtrips + [trip]))
 
 				for i in range(b+1, e+1): # b < i <= e
 					if trip[i].dts_arr >= t_min: break # after +1 transfer, it's guaranteed to be dominated
@@ -302,6 +303,8 @@ class TBRoutingEngine:
 		DepartureCriteriaCheck = namedtuple('DCCheck', 'trip stopidx dts_src journey')
 		TripSegment = namedtuple('TripSeg', 'trip stopidx_a stopidx_b journey')
 
+		# results is not a BiCriteriaParetoSet here, as it requires additional dts_dep criteria
+		# Suboptimal results are filtered-out later in JourneySet.add() based on that
 		results = list()
 		R, Q = dict(), dict()
 
@@ -350,7 +353,7 @@ class TBRoutingEngine:
 						line_dts_dst = trip[i_dst].dts_arr + dt_fp
 						if line_dts_dst < t_min:
 							t_min_idx[n] = line_dts_dst
-							results.append(jtrips + [trip])
+							results.append(t.base.QueryResult(line_dts_dst, n, jtrips + [trip]))
 
 					# Check if trip can lead to nondominated journeys, and queue trips reachable from it
 					for i in range(b+1, e+1): # b < i <= e
