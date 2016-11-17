@@ -94,7 +94,7 @@ def parse_gtfs_timetable(gtfs_dir, conf):
 		if trip: trips.add(trip)
 
 	footpaths, fp_samestop_count, fp_synth = types.Footpaths(), 0, False
-	get_stop_set = lambda stop_id: list(filter(stops.get, stop_sets.get(stop_id)))
+	get_stop_set = lambda stop_id: list(filter(stops.get, stop_sets.get(stop_id, list())))
 	for t in it.chain.from_iterable(
 			iter_gtfs_tuples(gtfs_dir, name, empty_if_missing=True)
 			for name in ['transfers', 'links'] ):
