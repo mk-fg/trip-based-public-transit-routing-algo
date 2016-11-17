@@ -98,7 +98,8 @@ class TBRoutingEngine:
 
 		counts, progress = Counter(), self.progress_iter('pre-initial-set', len(timetable.trips))
 		for n, trip_t in enumerate(timetable.trips):
-			progress.send(['transfer-set-size={:,} processed-trips={:,}', len(transfers), n])
+			progress.send([ 'transfer-set-size={:,} processed-trips={:,}, discarded'
+				' u-turns={:,} subopt={:,}', len(transfers), n, counts['uturns'], counts['worse'] ])
 			min_time_arr, min_time_ch = dict(), dict()
 
 			for i in range(len(trip_t)-1, 0, -1): # first stop of the trip is skipped
