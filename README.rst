@@ -17,8 +17,8 @@ following papers:
 
 See "Links" section below for more references.
 
-Not focused on performance, only readability and correctness aspects,
-i.e. just a proof of concept, not suitable for any kind of production use.
+Not focused on performance much, mostly readability and algo-correctness
+aspects, i.e. just a proof of concept, not suitable for any kind of production use.
 
 Under heavy development, see `doc/TODO <doc/TODO>`_ file for a general list
 of things that are not (yet?) implemented.

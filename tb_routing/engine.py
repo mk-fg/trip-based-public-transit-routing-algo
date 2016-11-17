@@ -1,5 +1,5 @@
 import itertools as it, operator as op, functools as ft
-from collections import defaultdict, namedtuple
+from collections import defaultdict, namedtuple, Counter
 
 from . import utils as u, types as t
 
@@ -85,63 +85,10 @@ class TBRoutingEngine:
 
 		return lines
 
-
 	@timer
 	def precalc_transfer_set(self, timetable, lines):
-		# Precalculation steps here are not merged and not parallelized in any way.
-		transfers = self._pre_initial_set(timetable, lines) # Algorithm 1
-		transfers = self._pre_remove_u_turns(transfers, timetable.footpaths) # Algorithm 2
-		transfers = self._pre_reduction(timetable, transfers) # Algorithm 3
-		self.log.debug('Precalculated transfer set size: {:,}', len(transfers))
-		return transfers
-
-	@timer
-	def _pre_initial_set(self, timetable, lines):
-		'Algorithm 1: Initial transfer computation.'
+		# Steps here are merged from 3 separate steps in the paper
 		transfers = t.base.TransferSet()
-
-		progress = self.progress_iter('pre-initial-set', len(timetable.trips))
-		for n, trip_t in enumerate(timetable.trips):
-			progress.send(['transfer-set-size={:,} processed-trips={:,}', len(transfers), n])
-			for i, ts_p in enumerate(trip_t):
-				if i == 0: continue # "do not add any transfers from the first stop ..."
-
-				for stop_q, dt_fp in timetable.footpaths.to_stops_from(ts_p.stop):
-					dts_q = ts_p.dts_arr + dt_fp
-					for j, line in lines.lines_with_stop(stop_q):
-						if j == len(line[0]) - 1: continue # "do not add any transfers ... to the last stop"
-						trip_u = line.earliest_trip(j, dts_q)
-						if not trip_u: continue # all trips for L(q) have departed by dts_q
-						if not (
-							line != lines.line_for_trip(trip_t)
-							or trip_u.compare(trip_t) is t.public.SolutionStatus.non_dominated
-							or j < i ): continue
-						transfers.add(t.base.Transfer(trip_t[i], trip_u[j], dt_fp))
-
-		self.log.debug('Initial transfer set size: {:,}', len(transfers))
-		return transfers
-
-	@timer
-	def _pre_remove_u_turns(self, transfers, footpaths):
-		'Algorithm 2: Remove U-turn transfers.'
-		discard_count = 0
-		for transfer in list(transfers):
-			try:
-				ts_t = transfer.ts_from.trip[transfer.ts_from.stopidx-1]
-				ts_u = transfer.ts_to.trip[transfer.ts_to.stopidx+1]
-			except IndexError: continue # transfers from-start/to-end of t/u trips
-			if ts_t.stop == ts_u.stop:
-				try: dt_ch = footpaths.time_delta(ts_t.stop, ts_t.stop)
-				except KeyError: continue
-				if ts_t.dts_arr + dt_ch <= ts_u.dts_dep:
-					del transfers[transfer]
-					discard_count += 1
-		self.log.debug('Discarded U-turns: {:,}', discard_count)
-		return transfers
-
-	@timer
-	def _pre_reduction(self, timetable, transfers):
-		'Algorithm 3: Transfer reduction.'
 
 		def update_min_time(min_time_map, stop, dts):
 			if dts < min_time_map.get(stop, u.inf):
@@ -149,34 +96,62 @@ class TBRoutingEngine:
 				return True
 			return False
 
-		discard_count, progress = 0, self.progress_iter('pre-reduction', len(timetable.trips))
-		for trip_t in timetable.trips:
+		counts, progress = Counter(), self.progress_iter('pre-initial-set', len(timetable.trips))
+		for n, trip_t in enumerate(timetable.trips):
+			progress.send(['transfer-set-size={:,} processed-trips={:,}', len(transfers), n])
 			min_time_arr, min_time_ch = dict(), dict()
-			progress.send(['transfer-set-size={:,} discarded={:,}', len(transfers), discard_count])
 
-			for i in range(len(trip_t)-1, 0, -1): # first stop is skipped here as well
+			for i in range(len(trip_t)-1, 0, -1): # first stop of the trip is skipped
 				ts_p = trip_t[i]
+
+				reachable_stops = list()
 				update_min_time(min_time_arr, ts_p.stop, ts_p.dts_arr)
 				for stop_q, dt_fp in timetable.footpaths.to_stops_from(ts_p.stop):
 					dts_q = ts_p.dts_arr + dt_fp
 					update_min_time(min_time_arr, stop_q, dts_q)
 					update_min_time(min_time_ch, stop_q, dts_q)
+					reachable_stops.append((stop_q, dt_fp, dts_q))
 
-				for transfer in list(transfers.from_trip_stop(ts_p)):
-					trip_u, j = transfer.ts_to.trip, transfer.ts_to.stopidx
-					keep = False
-					for k in range(j+1, len(trip_u)):
-						ts_u = trip_u[k]
-						keep = keep | update_min_time(min_time_arr, ts_u.stop, ts_u.dts_arr)
-						for stop_q, dt_fp in timetable.footpaths.to_stops_from(ts_u.stop):
-							dts_q = ts_u.dts_arr + dt_fp
-							keep = keep | update_min_time(min_time_arr, stop_q, dts_q)
-							keep = keep | update_min_time(min_time_ch, stop_q, dts_q)
-					if not keep:
-						del transfers[transfer]
-						discard_count += 1
+				for stop_q, dt_fp, dts_q in reachable_stops:
+					for j, line in lines.lines_with_stop(stop_q):
+						if j == len(line[0]) - 1: continue # transfers to last stop make no sense
+						trip_u = line.earliest_trip(j, dts_q)
+						if not trip_u: continue # all trips for L(q) have departed by dts_q
+						ts_q = trip_u[j]
 
-		self.log.debug('Discarded no-improvement transfers: {:,}', discard_count)
+						if not (
+							line != lines.line_for_trip(trip_t)
+							or trip_u.compare(trip_t) is t.public.SolutionStatus.non_dominated
+							or j < i ): continue
+
+						# U-turn transfers
+						try: ts_t, ts_u = trip_t[i-1], trip_u[j+1]
+						except IndexError: continue # transfers from-start/to-end of t/u trips
+						if ts_t.stop == ts_u.stop:
+							try: dt = timetable.footpaths.time_delta(ts_t.stop, ts_u.stop)
+							except KeyError: continue
+							if ts_t.dts_arr + dt <= ts_u.dts_dep:
+								counts['uturns'] += 1
+								continue
+
+						# No-improvement transfers
+						keep = False
+						for k in range(j+1, len(trip_u)):
+							ts = trip_u[k]
+							keep = keep | update_min_time(min_time_arr, ts.stop, ts.dts_arr)
+							for stop, dt in timetable.footpaths.to_stops_from(ts_u.stop):
+								dts = ts_u.dts_arr + dt_fp
+								keep = keep | update_min_time(min_time_arr, stop, dts)
+								keep = keep | update_min_time(min_time_ch, stop, dts)
+						if not keep:
+							counts['worse'] += 1
+							continue
+
+						transfers.add(t.base.Transfer(ts_p, ts_q, dt_fp))
+
+		self.log.debug( 'Discarded u-turns={:,}'
+			' no-improvement={:,}', counts['uturns'], counts['worse'] )
+		self.log.debug('Resulting transfer set size: {:,}', len(transfers))
 		return transfers
 
 
