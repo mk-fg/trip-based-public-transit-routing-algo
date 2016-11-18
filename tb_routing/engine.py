@@ -331,6 +331,7 @@ class TBRoutingEngine:
 			while Q and n < max_transfers:
 				t_min = t_min_idx.get(n, u.inf)
 				for trip, b, e, jtrips in Q.pop(n):
+					jtrips += [trip]
 
 					# Check if trip reaches stop_dst (or its footpath-vicinity) directly
 					for i_dst, line, dt_fp in lines_to_dst.get(trip, list()):
@@ -338,14 +339,14 @@ class TBRoutingEngine:
 						line_dts_dst = trip[i_dst].dts_arr + dt_fp
 						if line_dts_dst < t_min:
 							t_min_idx[n] = line_dts_dst
-							results.add(t.base.QueryResult(line_dts_dst, n, jtrips + [trip], dts_src))
+							results.add(t.base.QueryResult(line_dts_dst, n, jtrips, dts_src))
 
 					# Check if trip can lead to nondominated journeys, and queue trips reachable from it
 					for i in range(b+1, e+1): # b < i <= e
 						if trip[i].dts_arr >= t_min: break # after +1 transfer, it's guaranteed to be dominated
 						for transfer in transfers.from_trip_stop(trip[i]):
 							if transfer.ts_to.dts_arr >= t_min: continue
-							enqueue(transfer.ts_to.trip, transfer.ts_to.stopidx, n+1, jtrips + [trip])
+							enqueue(transfer.ts_to.trip, transfer.ts_to.stopidx, n+1, list(jtrips))
 
 				n += 1
 			Q.clear()
@@ -416,7 +417,7 @@ class TBRoutingEngine:
 								stop_labels[stop_q].add(ts_list)
 
 							for transfer in transfers.from_trip_stop(ts):
-								enqueue(transfer.ts_to.trip, transfer.ts_to.stopidx, ts_list)
+								enqueue(transfer.ts_to.trip, transfer.ts_to.stopidx, list(ts_list))
 
 			subtree = tree[stop_src]
 			node_src = subtree.node(stop_src, t='src')
