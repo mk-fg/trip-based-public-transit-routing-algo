@@ -297,7 +297,7 @@ class TBRoutingEngine:
 			for trip_u in lines.line_for_trip(trip)\
 					.trips_by_relation(trip, _ss.non_dominated, _ss.equal):
 				i_min = min(i, R.get((n, trip_u), i_max))
-				for n in range(n, max_transfers): R[n, trip_u] = i_min
+				for m in range(n, max_transfers): R[m, trip_u] = i_min
 
 		lines_to_dst = dict() # {trip: (i, line, dt)}
 		for stop_q, dt_fp in timetable.footpaths.from_stops_to(stop_dst):
@@ -380,7 +380,7 @@ class TBRoutingEngine:
 			for trip_u in lines.line_for_trip(trip)\
 					.trips_by_relation(trip, _ss.non_dominated, _ss.equal):
 				i_min = min(i, trip_tails_checked.get((n, trip_u), i_max))
-				for n in range(n, max_transfers): trip_tails_checked[n, trip_u] = i_min
+				for m in range(n, max_transfers+1): trip_tails_checked[m, trip_u] = i_min
 
 		progress = self.progress_iter('transfer-patterns', len(timetable.stops))
 		for stop_src in timetable.stops:
