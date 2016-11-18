@@ -231,11 +231,6 @@ class Journey:
 	def __iter__(self): return iter(self.segments)
 	def __hash__(self): return id(self)
 
-	@staticmethod
-	def dts_format(dts):
-		dts = int(dts)
-		return datetime.time(dts // 3600, (dts % 3600) // 60, dts % 60, dts % 1)
-
 	def __repr__(self):
 		points = list()
 		for seg in self.segments:
@@ -243,10 +238,10 @@ class Journey:
 				if not points:
 					points.append(
 						'{0.trip.id}:{0.stopidx}:{0.stop.id}:{0.stop.name} [{dts_dep}]'\
-						.format(seg.ts_from, dts_dep=self.dts_format(seg.ts_from.dts_dep)) )
+						.format(seg.ts_from, dts_dep=u.dts_format(seg.ts_from.dts_dep)) )
 				points.append(
 					'{0.trip.id}:{0.stopidx}:{0.stop.id}:{0.stop.name} [{dts_arr}]'\
-					.format(seg.ts_to, dts_arr=self.dts_format(seg.ts_to.dts_arr)) )
+					.format(seg.ts_to, dts_arr=u.dts_format(seg.ts_to.dts_arr)) )
 			elif isinstance(seg, JourneyFp):
 				points.append('(fp-to={0.id}:{0.name} dt={1})'.format(
 					seg.stop_to, datetime.timedelta(seconds=int(seg.dt)) ))
@@ -255,14 +250,14 @@ class Journey:
 	def pretty_print(self, indent=0, **print_kws):
 		p = lambda tpl,*a,**k: print(' '*indent + tpl.format(*a,**k), **print_kws)
 		p( 'Journey {:x} (arrival: {}, trips: {}):',
-			id(self), self.dts_format(self.dts_arr), self.trip_count )
+			id(self), u.dts_format(self.dts_arr), self.trip_count )
 		for seg in self.segments:
 			if isinstance(seg, JourneyTrip):
 				p('  trip [{}]:', seg.ts_from.trip.id)
 				p( '    from (dep at {dts_dep}): {0.stopidx}:{0.stop.name} [{0.stop.id}]',
-					seg.ts_from, dts_dep=self.dts_format(seg.ts_from.dts_dep) )
+					seg.ts_from, dts_dep=u.dts_format(seg.ts_from.dts_dep) )
 				p( '    to (arr at {dts_arr}): {0.stopidx}:{0.stop.name} [{0.stop.id}]',
-					seg.ts_to, dts_arr=self.dts_format(seg.ts_to.dts_arr) )
+					seg.ts_to, dts_arr=u.dts_format(seg.ts_to.dts_arr) )
 			elif isinstance(seg, JourneyFp):
 				p('  footpath (time: {}):', datetime.timedelta(seconds=int(seg.dt)))
 				p('    from: {0.name} [{0.id}]', seg.stop_from)

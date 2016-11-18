@@ -1,7 +1,7 @@
 import itertools as it, operator as op, functools as ft
 from pathlib import Path
 from collections import UserList
-import os, sys, logging
+import os, sys, logging, datetime
 
 import attr
 
@@ -93,3 +93,15 @@ def pickle_load(name=use_pickle_cache or 'state.pickle', fail=False):
 			return pickle.load(src)
 	except Exception as err:
 		if fail: raise
+
+
+def dts_parse(dts_str):
+	if ':' not in dts_str: return float(dts_str)
+	dts_vals = dts_str.split(':')
+	if len(dts_vals) == 2: dts_vals.append('00')
+	assert len(dts_vals) == 3, dts_vals
+	return sum(int(n)*k for k, n in zip([3600, 60, 1], dts_vals))
+
+def dts_format(dts):
+	dts = int(dts)
+	return datetime.time(dts // 3600, (dts % 3600) // 60, dts % 60, dts % 1)
