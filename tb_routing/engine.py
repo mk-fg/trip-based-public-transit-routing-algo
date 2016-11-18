@@ -16,6 +16,8 @@ def timer(self_or_func, func=None, *args, **kws):
 	return self_or_func.timer_wrapper(func, *args, **kws)
 
 
+class TimetableError(Exception): pass
+
 class TBRoutingEngine:
 
 	graph = None
@@ -61,7 +63,13 @@ class TBRoutingEngine:
 
 		line_trips = defaultdict(list)
 		line_stops = lambda trip: tuple(map(op.attrgetter('stop'), trip))
-		for trip in timetable.trips: line_trips[line_stops(trip)].append(trip)
+		for trip in timetable.trips:
+			dts_chk = -1
+			for ts in trip: # sanity check
+				if not (ts.dts_arr > dts_chk and ts.dts_arr <= ts.dts_dep):
+					raise TimetableError('Time jumps backwards for stops of the trip', trip)
+				dts_chk = ts.dts_dep
+			line_trips[line_stops(trip)].append(trip)
 
 		lines, progress = t.base.Lines(), self.progress_iter('lines', len(line_trips))
 		for trips in line_trips.values():

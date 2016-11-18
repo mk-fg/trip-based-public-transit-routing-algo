@@ -107,15 +107,13 @@ class Footpaths:
 	def __len__(self): return self._stats()[1]
 
 
-trip_stop_daytime = lambda dts: dts % (24 * 3600)
-
 @u.attr_struct(repr=False)
 class TripStop:
 	trip = u.attr_init()
 	stopidx = u.attr_init()
 	stop = u.attr_init()
-	dts_arr = u.attr_init(convert=trip_stop_daytime)
-	dts_dep = u.attr_init(convert=trip_stop_daytime)
+	dts_arr = u.attr_init()
+	dts_dep = u.attr_init()
 
 	@classmethod
 	def dummy_for_stop(cls, stop, dts_arr=0, dts_dep=0):
