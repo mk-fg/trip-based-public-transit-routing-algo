@@ -103,5 +103,7 @@ def dts_parse(dts_str):
 	return sum(int(n)*k for k, n in zip([3600, 60, 1], dts_vals))
 
 def dts_format(dts):
-	dts = int(dts)
-	return datetime.time(dts // 3600, (dts % 3600) // 60, dts % 60, dts % 1)
+	dts_days, dts = divmod(int(dts), 24 * 3600)
+	dts = str(datetime.time(dts // 3600, (dts % 3600) // 60, dts % 60, dts % 1))
+	if dts_days: dts = '{}+{}'.format(dts_days, dts)
+	return dts
