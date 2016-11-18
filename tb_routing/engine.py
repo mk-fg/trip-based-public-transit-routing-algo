@@ -77,7 +77,6 @@ class TBRoutingEngine:
 					else:
 						line.add(trip_a)
 						break
-					if not trip_a: break
 				else: # failed to find line to group trip into
 					lines_for_stopseq.append(t.base.Line(trip_a))
 

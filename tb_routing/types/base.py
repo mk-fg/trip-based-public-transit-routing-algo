@@ -77,7 +77,7 @@ class Lines:
 	def line_for_trip(self, trip): return self.idx_trip[trip]
 
 	def __getitem__(self, line_id): return self.idx_id[line_id]
-	def __iter__(self): return iter(self.idx_trip.values())
+	def __iter__(self): return iter(self.idx_id.values())
 	def __len__(self): return len(set(map(id, self.idx_trip.values())))
 
 
@@ -105,9 +105,6 @@ class TransferSet:
 	def from_trip_stop(self, ts):
 		k1 = ts.trip.id, ts.stopidx
 		return self.set_idx.get(k1, dict()).values()
-
-	def earliest_from_trip_to_line_stop(self, trip, ls, dts_dep):
-		raise NotImplementedError # XXX: needed for TBTPRoutingEngine
 
 	def __contains__(self, transfer):
 		k1, k2 = self.set_idx_keys[transfer.id]
