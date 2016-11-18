@@ -101,12 +101,13 @@ def main(args=None):
 	lines = dict()
 	for node in dag.nodes:
 		node_lines = node.title.split('/')
-		m = re.search('^(.*?:)?L(.+?)-(.*)$', node.title)
-		if not m: raise ValueError(node)
-		stop_id, line_id, line_seq = m.groups()
-		stop = stops.add(types.Stop(
-			stop_id or node.title, node.title, node.x, node.y ))
-		lines.setdefault(line_id, list()).append((line_seq, stop))
+		for line_node in node_lines:
+			m = re.search('^(.*?:)?L(.+?)-(.*)$', line_node)
+			if not m: raise ValueError(line_node)
+			stop_id, line_id, line_seq = m.groups()
+			stop = stops.add(types.Stop(
+				stop_id or node.title, node.title, node.x, node.y ))
+			lines.setdefault(line_id, list()).append((line_seq, stop))
 
 	for line_id, line in sorted(lines.items()):
 		line_dts_start, line_dts_end = line_dts_start_end()
@@ -117,7 +118,7 @@ def main(args=None):
 		for trip_seq in range(conf.line_trip_max_count):
 			trip_dts_start = line_dts_start + line_dts_interval * trip_seq
 			if trip_dts_start > line_dts_end: break
-			trip = types.Trip()
+			trip = types.Trip(line_id_hint='L{}'.format(line_id))
 			for stopidx, stop in enumerate(line_stops):
 				if not trip.stops: dts_arr = trip_dts_start
 				else:

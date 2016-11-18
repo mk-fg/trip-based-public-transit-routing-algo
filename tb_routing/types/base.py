@@ -26,12 +26,15 @@ class Line:
 		if not self._id_cache:
 			self._id_cache = hash(tuple(map(op.attrgetter('id'), self.set_idx)))
 		return self._id_cache
+	@id.setter
+	def id(self, value): self._id_cache = value
 
 	def add(self, *trips):
-		assert not self._id_cache,\
-			'Changing Line after its Trips-derived id was used.'
 		self.set_idx.extend(trips)
 		self.set_idx.sort(key=lambda trip: sum(map(op.attrgetter('dts_arr'), trip)))
+		line_id_hints = sorted(set(filter( None,
+			map(op.attrgetter('line_id_hint'), self.set_idx) )))
+		if line_id_hints: self.id = '/'.join(line_id_hints) # purely for introspection/debugging
 
 	def earliest_trip(self, stopidx, dts=0):
 		for trip in self:

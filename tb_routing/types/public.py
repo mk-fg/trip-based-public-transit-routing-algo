@@ -132,6 +132,8 @@ class TripStop:
 class Trip:
 	stops = u.attr_init(list)
 	id = u.attr_init_id()
+	line_id_hint = u.attr_init(None) # can be set for introspection/debugging
+
 	def __hash__(self): return hash(self.id)
 
 	def add(self, stop): self.stops.append(stop)
