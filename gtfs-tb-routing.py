@@ -183,6 +183,8 @@ def main(args=None):
 	group = parser.add_argument_group('Misc/debug options')
 	group.add_argument('-t', '--timetable', action='store_true',
 		help='Treat "gtfs_dir" argument as a pickled TImetable object.')
+	group.add_argument('--dot-for-lines', metavar='path',
+		help='Dump Stop/Line graph (in graphviz dot format) to a specified file and exit.')
 	group.add_argument('-d', '--debug', action='store_true', help='Verbose operation mode.')
 
 	cmds = parser.add_subparsers(title='Commands', dest='call')
@@ -238,6 +240,11 @@ def main(args=None):
 	timetable, router = init_gtfs_router( opts.gtfs_dir,
 		opts.cache, conf_engine=conf_engine,
 		path_timetable=opts.timetable, timer_func=calc_timer )
+
+	if opts.dot_for_lines:
+		with open(opts.dot_for_lines, 'w') as dst:
+			tb.vis.dot_for_lines(router.graph.lines, dst)
+		return
 
 	if opts.call == 'query-earliest-arrival':
 		dts_start = u.dts_parse(opts.day_time)

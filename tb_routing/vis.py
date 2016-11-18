@@ -9,7 +9,8 @@ from . import utils as u, types as t
 print_fmt = lambda tpl, *a, file=None, end='\n', **k:\
 	print(tpl.format(*a,**k), file=file, end=end)
 
-dot_name = lambda n: '"{}"'.format(n.replace('"', '\\"'))
+dot_str = lambda n: '"{}"'.format(n.replace('"', '\\"'))
+dot_html = lambda n: '<{}>'.format(n)
 
 
 def dot_for_lines(lines, dst):
@@ -22,15 +23,22 @@ def dot_for_lines(lines, dst):
 			stop_names[stop].add('{}[{}]'.format(line.id, n))
 			if stop_prev: stop_edges[stop_prev].add(stop)
 			stop_prev = stop
-	for stop, line_names in stop_names.items():
-		stop_names[stop] = '{}\\n{}'.format(stop.name, '\\n'.join(line_names))
 
 	p('digraph {{')
+
+	p('\n  ### Labels')
+	for stop, line_names in stop_names.items():
+		label = '<b>{}</b>{}'.format(
+			stop.name, '<br/>- '.join([''] + sorted(line_names)) )
+		name = stop_names[stop] = 'stop-{}'.format(stop.id)
+		p('  {} [label={}]'.format(dot_str(name), dot_html(label)))
+
+	p('\n  ### Edges')
 	for stop_src, edges in stop_edges.items():
 		name_src = stop_names[stop_src]
 		for stop_dst in edges:
 			name_dst = stop_names[stop_dst]
-			p('  {} -> {}', *map(dot_name, [name_src, name_dst]))
+			p('  {} -> {}', *map(dot_str, [name_src, name_dst]))
 	p('}}')
 
 
@@ -57,10 +65,10 @@ def dot_for_tp_subtree(subtree, dst):
 				else: stops_dst.add(name_src)
 			for node_dst in node_src.edges_to:
 				name_dst = node_name(node_dst)
-				p('  {} -> {}', *map(dot_name, [name_src, name_dst]))
+				p('  {} -> {}', *map(dot_str, [name_src, name_dst]))
 
 	for subset in filter(None, [stops_src, stops_dst]):
 		p( 'subgraph {{\n  rank = same;{};\n}}',
-			', '.join(map(dot_name, sorted(subset))) )
+			', '.join(map(dot_str, sorted(subset))) )
 
 	p('}}')
