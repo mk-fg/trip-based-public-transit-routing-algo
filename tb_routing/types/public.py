@@ -126,13 +126,14 @@ class TripStop:
 				' dts_arr={0.dts_arr}, dts_dep={0.dts_dep})' )\
 			.format(self, trip_id=self.trip.id if self.trip else None)
 
-@u.attr_struct
+@u.attr_struct(cmp=False)
 class Trip:
 	stops = u.attr_init(list)
 	id = u.attr_init_id()
 	line_id_hint = u.attr_init(None) # can be set for introspection/debugging
 
 	def __hash__(self): return hash(self.id)
+	def __eq__(self, trip): return self.id == trip.id
 
 	def add(self, stop): self.stops.append(stop)
 
