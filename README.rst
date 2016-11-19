@@ -255,6 +255,9 @@ It can be used to draw some testing transport network, using nodes as stops,
 positioning them as they'd be on a flat map (to auto-generate footpaths to ones
 that are close) and naming/connecting them according to trip-lines.
 
+.. figure:: doc/example-images/json-dgc.jpg
+   :alt: json-dgc webui with loaded example graph
+
 ``timetable-from-json-dgc.py`` script can then be used to convert saved JSON
 graph into a pickled timetable, with trips auto-generated to run with regular
 intervals (and some fixed speed) along drawn lines, and footpaths connecting
