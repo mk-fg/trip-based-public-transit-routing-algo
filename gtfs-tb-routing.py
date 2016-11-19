@@ -185,6 +185,9 @@ def main(args=None):
 		help='Treat "gtfs_dir" argument as a pickled TImetable object.')
 	group.add_argument('--dot-for-lines', metavar='path',
 		help='Dump Stop/Line graph (in graphviz dot format) to a specified file and exit.')
+	group.add_argument('--dot-opts', metavar='yaml-data',
+		help='Options for graphviz graph/nodes/edges to use with all'
+			' --dot-for-* commands, as a YAML mappings. Example: {graph: {rankdir: LR}}')
 	group.add_argument('-d', '--debug', action='store_true', help='Verbose operation mode.')
 
 	cmds = parser.add_subparsers(title='Commands', dest='call')
@@ -247,9 +250,13 @@ def main(args=None):
 		opts.cache, conf_engine=conf_engine,
 		path_timetable=opts.timetable, timer_func=calc_timer )
 
+	dot_opts = dict()
+	if opts.dot_opts:
+		import yaml
+		dot_opts = yaml.safe_load(opts.dot_opts)
 	if opts.dot_for_lines:
 		with tb.u.safe_replacement(opts.dot_for_lines) as dst:
-			tb.vis.dot_for_lines(router.graph.lines, dst)
+			tb.vis.dot_for_lines(router.graph.lines, dst, dot_opts=dot_opts)
 		return
 
 	if opts.call == 'query-earliest-arrival':
@@ -274,13 +281,13 @@ def main(args=None):
 
 		if opts.dot_for_tp_subtree:
 			with tb.u.safe_replacement(opts.dot_for_tp_subtree) as dst:
-				tb.vis.dot_for_tp_subtree(tp_router.tree[a], dst)
+				tb.vis.dot_for_tp_subtree(tp_router.tree[a], dst, dot_opts=dot_opts)
 			return
 
 		query_tree = tp_router.build_query_tree(a, b)
 		if opts.dot_for_tp_query_tree:
 			with tb.u.safe_replacement(opts.dot_for_tp_query_tree) as dst:
-				tb.vis.dot_for_tp_subtree(query_tree, dst)
+				tb.vis.dot_for_tp_subtree(query_tree, dst, dot_opts=dot_opts)
 			return
 
 		tp_router.query_profile(a, b, dts_edt, dts_ldt, query_tree)

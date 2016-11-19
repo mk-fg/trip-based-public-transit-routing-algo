@@ -15,19 +15,19 @@ dot_html = lambda n: '<{}>'.format(n)
 
 
 @contextlib.contextmanager
-def dot_graph(dst, graph_opts, indent=2):
+def dot_graph(dst, dot_opts, indent=2):
 	print_fmt('digraph {{', file=dst)
 	if isinstance(indent, int): indent = ' '*indent
 	p = lambda tpl, *a, end='\n', **k:\
 		print_fmt(indent + tpl, *a, file=dst, end=end, **k)
 	p('### Defaults')
-	for t, opts in graph_opts.items():
+	for t, opts in (dot_opts or dict()).items():
 		p('{} [ {} ]'.format(t, ', '.join('{}={}'.format(k, v) for k, v in opts.items())))
 	yield p
 	print_fmt('}}', file=dst)
 
 
-def dot_for_lines(lines, dst, **graph_opts):
+def dot_for_lines(lines, dst, dot_opts=None):
 	stop_names, stop_edges = defaultdict(set), defaultdict(set)
 	for line in lines:
 		stop_prev = None
@@ -36,7 +36,7 @@ def dot_for_lines(lines, dst, **graph_opts):
 			if stop_prev: stop_edges[stop_prev].add(stop)
 			stop_prev = stop
 
-	with dot_graph(dst, graph_opts) as p:
+	with dot_graph(dst, dot_opts) as p:
 
 		p('')
 		p('### Labels')
@@ -55,7 +55,7 @@ def dot_for_lines(lines, dst, **graph_opts):
 				p('{} -> {}', *map(dot_str, [name_src, name_dst]))
 
 
-def dot_for_tp_subtree(subtree, dst, **graph_opts):
+def dot_for_tp_subtree(subtree, dst, dot_opts=None):
 	assert subtree.prefix, 'Only subtrees are proper graphs'
 
 	def node_name(node, pre=None, pre_type=None):
@@ -72,7 +72,9 @@ def dot_for_tp_subtree(subtree, dst, **graph_opts):
 		if pre: v = '{}:{}'.format(pre, v)
 		return v
 
-	with dot_graph(dst, graph_opts) as p:
+	dot_opts = dot_opts or dict()
+	dot_opts.setdefault('graph', dict()).setdefault('rankdir', 'LR')
+	with dot_graph(dst, dot_opts) as p:
 
 		# src/dst are reversed here,
 		#  because graph edges are directed from dst to src
