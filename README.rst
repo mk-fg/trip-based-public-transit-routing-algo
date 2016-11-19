@@ -156,7 +156,7 @@ Requirements
 - (for Python<3.4 only) `pathlib2 <https://pypi.python.org/pypi/pathlib2/>`_
 - (for Python<3.4 only) `enum34 <https://pypi.python.org/pypi/enum34/>`_
 
-To install all these on any random system (to ``~/.local/`` with --user)::
+To install all these on any random system (to ``~/.local/`` with ``--user``)::
 
   % python3 --version
   Python 3.3.5 (ea9979b550eeae87924dc4bef06070e8f8d0e22f, Oct 12 2016, 11:31:15)
@@ -282,6 +282,44 @@ first/last times, intervals, stop arrival-departure deltas, etc.
 ``timetable-from-json-dgc.example.json`` is an example JSON graph, as produced
 by json-dgc, and can be loaded/tweaked there or used as a template to generate
 with some other tool (just two lists of all nodes / edges).
+
+Generated timetable pickle file can be loaded by ``gtfs-tb-routing.py`` cli
+script (instead of gtfs data) using ``-t/--timetable`` option.
+
+
+Using graphviz to render internal graphs
+````````````````````````````````````````
+
+``gtfs-tb-routing.py`` script has ``--dot-...`` options to dump various internal
+graphs in `graphviz "dot" format <http://www.graphviz.org/doc/info/lang.html>`_,
+which can then be rendered by `graphviz <http://www.graphviz.org/>`_, one of its
+wrappers or any similar tool.
+
+When visualized, such graphs can be useful to understand what's happening
+"under the hood" and easily identify potential issues at a glance.
+
+For example, to render all stops and lines connecting them from
+``timetable-from-json-dgc.example.json`` graph above and then open it in
+`xdot <https://github.com/jrfonseca/xdot.py>`_ graphviz wrapper,
+following commands can be used::
+
+  % ./gtfs-tb-routing.py -t tt.pickle \
+      --dot-for-lines lines.dot query-profile L2-a/L3-k L2-k/L3-i
+  % xdot lines.dot
+
+.. figure:: doc/example-images/dot-for-lines.jpg
+   :alt: xdot showing dot-for-lines graph fragment
+
+Or, to render a tree of transfer-patterns for a specified source stop::
+
+  % ./gtfs-tb-routing.py -t tt.pickle \
+      query-transfer-patterns --dot-for-tp-subtree tp-subtree.dot L2-a/L3-k L2-k/L3-i
+  % xdot tp-subtree.dot
+
+.. figure:: doc/example-images/dot-for-tp-subtree.jpg
+   :alt: xdot showing dot-for-tp-subtree graph fragment
+
+See ``-h/--help`` output for the script and relevant subcommands for more of these.
 
 
 
