@@ -228,7 +228,7 @@ class TBRoutingEngine:
 			i_max = len(trip) - 1 # for the purposes of "infinity" here
 			if i >= R.get(trip, i_max): return
 			Q.setdefault(n, list()).append(
-				TripSegment(trip, i, R.get(trip, i_max), jtrips) )
+				TripSegment(trip, i, R.get(trip, i_max), jtrips.copy()) )
 			for trip_u in lines.line_for_trip(trip)\
 					.trips_by_relation(trip, _ss.non_dominated, _ss.equal):
 				R[trip_u] = min(i, R.get(trip_u, i_max))
@@ -256,6 +256,7 @@ class TBRoutingEngine:
 		t_min, n = u.inf, 0
 		while Q:
 			for trip, b, e, jtrips in Q.pop(n):
+				jtrips = jtrips + [trip]
 
 				# Check if trip reaches stop_dst (or its footpath-vicinity) directly
 				for i_dst, line, dt_fp in lines_to_dst.get(trip, list()):
@@ -263,13 +264,13 @@ class TBRoutingEngine:
 					line_dts_dst = trip[i_dst].dts_arr + dt_fp
 					if line_dts_dst < t_min:
 						t_min = line_dts_dst
-						results.add(t.base.QueryResult(line_dts_dst, n, jtrips + [trip]))
+						results.add(t.base.QueryResult(line_dts_dst, n, jtrips))
 
 				for i in range(b+1, e+1): # b < i <= e
 					if trip[i].dts_arr >= t_min: break # after +1 transfer, it's guaranteed to be dominated
 					for transfer in transfers.from_trip_stop(trip[i]):
 						if transfer.ts_to.dts_arr >= t_min: continue
-						enqueue(transfer.ts_to.trip, transfer.ts_to.stopidx, n+1, jtrips + [trip])
+						enqueue(transfer.ts_to.trip, transfer.ts_to.stopidx, n+1, jtrips)
 
 			n += 1
 
@@ -293,7 +294,7 @@ class TBRoutingEngine:
 			i_max = len(trip) - 1 # for the purposes of "infinity" here
 			if i >= R.get((n, trip), i_max): return
 			Q.setdefault(n, list()).append(
-				TripSegment(trip, i, R.get((n, trip), i_max), jtrips) )
+				TripSegment(trip, i, R.get((n, trip), i_max), jtrips.copy()) )
 			for trip_u in lines.line_for_trip(trip)\
 					.trips_by_relation(trip, _ss.non_dominated, _ss.equal):
 				i_min = min(i, R.get((n, trip_u), i_max))
@@ -331,7 +332,7 @@ class TBRoutingEngine:
 			while Q and n < max_transfers:
 				t_min = t_min_idx.get(n, u.inf)
 				for trip, b, e, jtrips in Q.pop(n):
-					jtrips += [trip]
+					jtrips = jtrips + [trip]
 
 					# Check if trip reaches stop_dst (or its footpath-vicinity) directly
 					for i_dst, line, dt_fp in lines_to_dst.get(trip, list()):
@@ -346,7 +347,7 @@ class TBRoutingEngine:
 						if trip[i].dts_arr >= t_min: break # after +1 transfer, it's guaranteed to be dominated
 						for transfer in transfers.from_trip_stop(trip[i]):
 							if transfer.ts_to.dts_arr >= t_min: continue
-							enqueue(transfer.ts_to.trip, transfer.ts_to.stopidx, n+1, list(jtrips))
+							enqueue(transfer.ts_to.trip, transfer.ts_to.stopidx, n+1, jtrips)
 
 				n += 1
 			Q.clear()
@@ -406,7 +407,7 @@ class TBRoutingEngine:
 					if not queue: break
 					queue_prev, queue = queue, list()
 					for trip, b, e, ts_list in queue_prev:
-						ts_list += [trip[b]] # trip[b] is transfer.ts_to - internal tree node
+						ts_list = ts_list + [trip[b]] # trip[b] is transfer.ts_to - internal tree node
 						for i in range(b+1, e+1): # b < i <= e
 							ts = trip[i]
 
@@ -417,7 +418,7 @@ class TBRoutingEngine:
 								stop_labels[stop_q].add(ts_list)
 
 							for transfer in transfers.from_trip_stop(ts):
-								enqueue(transfer.ts_to.trip, transfer.ts_to.stopidx, list(ts_list))
+								enqueue(transfer.ts_to.trip, transfer.ts_to.stopidx, ts_list)
 
 			subtree = tree[stop_src]
 			node_src = subtree.node(stop_src, t='src')
