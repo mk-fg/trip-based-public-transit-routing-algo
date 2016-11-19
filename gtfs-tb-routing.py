@@ -260,13 +260,13 @@ def main(args=None):
 		return
 
 	if opts.call == 'query-earliest-arrival':
-		dts_start = u.dts_parse(opts.day_time)
+		dts_start = tb.u.dts_parse(opts.day_time)
 		a, b = timetable.stops[opts.stop_from], timetable.stops[opts.stop_to]
 		journeys = router.query_earliest_arrival(a, b, dts_start)
 		journeys.pretty_print()
 
 	elif opts.call == 'query-profile':
-		dts_edt, dts_ldt = u.dts_parse(opts.day_time_earliest), u.dts_parse(opts.day_time_latest)
+		dts_edt, dts_ldt = tb.u.dts_parse(opts.day_time_earliest), tb.u.dts_parse(opts.day_time_latest)
 		a, b = timetable.stops[opts.stop_from], timetable.stops[opts.stop_to]
 		journeys = router.query_profile(a, b, dts_edt, dts_ldt, max_transfers=opts.max_transfers)
 		journeys.pretty_print()
