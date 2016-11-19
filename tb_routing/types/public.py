@@ -122,9 +122,11 @@ class TripStop:
 	def __hash__(self): return hash((self.trip, self.stopidx))
 	def __repr__(self): # mostly to avoid recursion
 		return ( 'TripStop('
-				'trip_id={trip_id}, stopidx={0.stopidx}, stop_id={0.stop.id},'
-				' dts_arr={0.dts_arr}, dts_dep={0.dts_dep})' )\
-			.format(self, trip_id=self.trip.id if self.trip else None)
+				'trip_id={line_id_hint}{trip_id}, stopidx={0.stopidx},'
+				' stop_id={0.stop.id}, dts_arr={0.dts_arr}, dts_dep={0.dts_dep})' )\
+			.format( self,
+				trip_id=self.trip.id if self.trip else None,
+				line_id_hint='{}:'.format(self.trip.line_id_hint) if self.trip.line_id_hint else '' )
 
 @u.attr_struct(cmp=False)
 class Trip:
@@ -136,7 +138,8 @@ class Trip:
 	def __eq__(self, trip): return self.id == trip.id
 
 	def add(self, stop):
-		assert self.stops[-1].dts_dep < stop.dts_arr # sanity check
+		assert stop.dts_arr <= stop.dts_dep
+		assert self.stops[-1].dts_dep < stop.dts_arr
 		self.stops.append(stop)
 
 	def compare(self, trip):
@@ -252,6 +255,9 @@ class Journey:
 
 	def pretty_print(self, indent=0, **print_kws):
 		p = lambda tpl,*a,**k: print(' '*indent + tpl.format(*a,**k), **print_kws)
+		stop_id_ext = lambda stop:\
+			' [{}]'.format(stop.id) if stop.id != stop.name else ''
+
 		p( 'Journey {:x} (arrival: {}, trips: {}):',
 			id(self), u.dts_format(self.dts_arr), self.trip_count )
 		for seg in self.segments:
@@ -260,14 +266,18 @@ class Journey:
 				if seg.ts_from.trip.line_id_hint:
 					trip_id = '{}:{}'.format(seg.ts_from.trip.line_id_hint, trip_id)
 				p('  trip [{}]:', trip_id)
-				p( '    from (dep at {dts_dep}): {0.stopidx}:{0.stop.name} [{0.stop.id}]',
-					seg.ts_from, dts_dep=u.dts_format(seg.ts_from.dts_dep) )
-				p( '    to (arr at {dts_arr}): {0.stopidx}:{0.stop.name} [{0.stop.id}]',
-					seg.ts_to, dts_arr=u.dts_format(seg.ts_to.dts_arr) )
+				p( '    from (dep at {dts_dep}): {0.stopidx}:{0.stop.name}{stop_id}',
+					seg.ts_from,
+					stop_id=stop_id_ext(seg.ts_from.stop),
+					dts_dep=u.dts_format(seg.ts_from.dts_dep) )
+				p( '    to (arr at {dts_arr}): {0.stopidx}:{0.stop.name}{stop_id}',
+					seg.ts_to,
+					stop_id=stop_id_ext(seg.ts_to.stop),
+					dts_arr=u.dts_format(seg.ts_to.dts_arr) )
 			elif isinstance(seg, JourneyFp):
 				p('  footpath (time: {}):', datetime.timedelta(seconds=int(seg.dt)))
-				p('    from: {0.name} [{0.id}]', seg.stop_from)
-				p('    to: {0.name} [{0.id}]', seg.stop_to)
+				p('    from: {0.name}{stop_id}', seg.stop_from, stop_id=stop_id_ext(seg.stop_from))
+				p('    to: {0.name}{stop_id}', seg.stop_to, stop_id=stop_id_ext(seg.stop_to))
 
 
 @u.attr_struct
