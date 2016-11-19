@@ -254,7 +254,10 @@ class Journey:
 			id(self), u.dts_format(self.dts_arr), self.trip_count )
 		for seg in self.segments:
 			if isinstance(seg, JourneyTrip):
-				p('  trip [{}]:', seg.ts_from.trip.id)
+				trip_id = seg.ts_from.trip.id
+				if seg.ts_from.trip.line_id_hint:
+					trip_id = '{}:{}'.format(seg.ts_from.trip.line_id_hint, trip_id)
+				p('  trip [{}]:', trip_id)
 				p( '    from (dep at {dts_dep}): {0.stopidx}:{0.stop.name} [{0.stop.id}]',
 					seg.ts_from, dts_dep=u.dts_format(seg.ts_from.dts_dep) )
 				p( '    to (arr at {dts_arr}): {0.stopidx}:{0.stop.name} [{0.stop.id}]',
