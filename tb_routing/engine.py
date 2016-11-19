@@ -482,9 +482,9 @@ class TBTPRoutingEngine:
 		return query_tree if qt_stats.nodes > 0 else None
 
 
-	def query_profile(self, stop_src, stop_dst, dts_edt, dts_ldt, max_transfers=15):
+	def query_profile(self, stop_src, stop_dst, dts_edt, dts_ldt, query_tree=..., max_transfers=15):
 		tt, lines, transfers = self.graph
-		query_tree = self.build_query_tree(stop_src, stop_dst)
+		if query_tree is ...: query_tree = self.build_query_tree(stop_src, stop_dst)
 		if not query_tree: return list()
 
 		NodeLabel = namedtuple('NodeLabel', 'ts n journey')

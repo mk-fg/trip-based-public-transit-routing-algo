@@ -215,16 +215,22 @@ def main(args=None):
 	cmd = cmds.add_parser('query-transfer-patterns',
 		help='Build/load Transfer-Patterns trie and run queries on it.'
 			' Not implemented.') # XXX
+	cmd.add_argument('stop_from', help='Stop ID to query journey from. Example: J22209723_0')
+	cmd.add_argument('stop_to', help='Stop ID to query journey to. Example: J2220952426_0')
 	cmd.add_argument('--tree-cache', metavar='path',
 		help='Pickle cache-file to load (if exists)'
 			' or save (if missing) resulting Transfer-Patterns'
 			' prefix-tree from/to (see arXiv:1607.01299v2 paper).')
+	cmd.add_argument('--dot-for-tp-subtree', metavar='path',
+		help='Dump TB-TP subtree graph for specified'
+			' stop_from (in graphviz dot format) to a file and exit.')
+	cmd.add_argument('--dot-for-tp-query-tree', metavar='path',
+		help='Dump TB-TP query tree graph for specified'
+			' stop_from/stop_to pair (in graphviz dot format) to a file and exit.')
 	cmd.add_argument('-m', '--max-transfers',
 		type=int, metavar='n', default=15,
 		help='Max number of transfers (i.e. interchanges)'
 			' between journey trips allowed in the results. Default: %(default)s')
-	cmd.add_argument('stop_from', help='Stop ID to query journey from. Example: J22209723_0')
-	cmd.add_argument('stop_to', help='Stop ID to query journey to. Example: J2220952426_0')
 
 	opts = parser.parse_args(sys.argv[1:] if args is None else args)
 
@@ -242,7 +248,7 @@ def main(args=None):
 		path_timetable=opts.timetable, timer_func=calc_timer )
 
 	if opts.dot_for_lines:
-		with open(opts.dot_for_lines, 'w') as dst:
+		with tb.u.safe_replacement(opts.dot_for_lines) as dst:
 			tb.vis.dot_for_lines(router.graph.lines, dst)
 		return
 
@@ -265,6 +271,19 @@ def main(args=None):
 		tp_tree = tb.u.pickle_load(cache_path) if cache_path else None
 		tp_router = router.build_tp_engine(tp_tree)
 		if not tp_tree and cache_path: tb.u.pickle_dump(tp_router.tree, cache_path)
+
+		if opts.dot_for_tp_subtree:
+			with tb.u.safe_replacement(opts.dot_for_tp_subtree) as dst:
+				tb.vis.dot_for_tp_subtree(tp_router.tree[a], dst)
+			return
+
+		query_tree = tp_router.build_query_tree(a, b)
+		if opts.dot_for_tp_query_tree:
+			with tb.u.safe_replacement(opts.dot_for_tp_query_tree) as dst:
+				tb.vis.dot_for_tp_subtree(query_tree, dst)
+			return
+
+		tp_router.query_profile(a, b, dts_edt, dts_ldt, query_tree)
 		print(tp_router.query_profile(a, b, dts_edt, dts_ldt))
 
 	else: parser.error('Action not implemented: {}'.format(opts.call))

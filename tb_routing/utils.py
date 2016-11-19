@@ -2,6 +2,7 @@ import itertools as it, operator as op, functools as ft
 from pathlib import Path
 from collections import UserList
 import os, sys, logging, datetime
+import contextlib, tempfile, stat
 
 import attr
 
@@ -76,12 +77,32 @@ def same_type_and_id(v1, v2):
 inf = float('inf')
 
 
+@contextlib.contextmanager
+def safe_replacement(path, *open_args, mode=None, **open_kws):
+	path = str(path)
+	if mode is None:
+		try: mode = stat.S_IMODE(os.lstat(path).st_mode)
+		except OSError: pass
+	open_kws.update( delete=False,
+		dir=os.path.dirname(path), prefix=os.path.basename(path)+'.' )
+	if not open_args: open_kws['mode'] = 'w'
+	with tempfile.NamedTemporaryFile(*open_args, **open_kws) as tmp:
+		try:
+			if mode is not None: os.fchmod(tmp.fileno(), mode)
+			yield tmp
+			if not tmp.closed: tmp.flush()
+			os.rename(tmp.name, path)
+		finally:
+			try: os.unlink(tmp.name)
+			except OSError: pass
+
+
 use_pickle_cache = os.environ.get('TB_PICKLE')
 pickle_log = get_logger('pickle')
 
 def pickle_dump(state, name=use_pickle_cache or 'state.pickle'):
 	import pickle
-	with open(str(name), 'wb') as dst:
+	with safe_replacement(name, 'wb') as dst:
 		pickle_log.debug('Pickling data (type: {}) to: {}', state.__class__.__name__, name)
 		pickle.dump(state, dst)
 
