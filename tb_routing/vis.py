@@ -59,7 +59,7 @@ def dot_for_tp_subtree(subtree, dst, dot_opts=None):
 	assert subtree.prefix, 'Only subtrees are proper graphs'
 
 	def node_name(node, pre=None, pre_type=None):
-		v = node.value
+		v, pre_type = node.value, pre_type or dict()
 		if isinstance(v, t.public.Stop):
 			v = v.name
 			if 'stop' in pre_type: v = '{}:{}'.format(pre_type['stop'], v)
@@ -84,7 +84,7 @@ def dot_for_tp_subtree(subtree, dst, dot_opts=None):
 				name_src = node_name(node_src, pre_type=dict(stop='dst'))
 				if isinstance(node_src.value, t.public.Stop):
 					if node_src.edges_to: stops_src.add(name_src)
-					else: stops_dst.add(name_src)
+					else: stops_dst.add(node_name(node_src, pre='src'))
 				for node_dst in node_src.edges_to:
 					name_dst = node_name(node_dst, pre_type=dict(stop='src'))
 					p('{} -> {}', *map(dot_str, [name_src, name_dst]))
