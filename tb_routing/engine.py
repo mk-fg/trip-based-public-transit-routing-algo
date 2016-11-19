@@ -314,13 +314,12 @@ class TBRoutingEngine:
 			if stop_q == stop_dst:
 				# Direct src-to-dst footpath can't be easily compared to
 				#  other results, as it has no fixed departure/arrival times,
-				#  hence added here as special "exceptional" one.
+				#  hence added here as a special "exceptional" result.
 				results.add_exception(t.base.QueryResult(None, 0, list()))
 			for i, line in lines.lines_with_stop(stop_q):
 				for trip in line:
-					dts_trip = trip[i].dts_dep
-					dts_min, dts_max = dts_trip + dt_fp, dts_trip - dt_fp
-					if not (dts_min >= dts_edt and dts_max <= dts_ldt): continue
+					dts_min, dts_max = trip[i].dts_arr - dt_fp, trip[i].dts_dep - dt_fp
+					if not (dts_edt <= u.dts_wrap(dts_max) or dts_ldt <= u.dts_wrap(dts_min)): continue
 					profile_queue.append(DepartureCriteriaCheck(trip, i, dts_max, list()))
 		profile_queue.sort(key=op.attrgetter('dts_src'), reverse=True) # latest-to-earliest
 
