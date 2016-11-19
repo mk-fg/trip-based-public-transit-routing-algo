@@ -367,7 +367,9 @@ class TBRoutingEngine:
 
 		DepartureCriteriaCheck = namedtuple('DCCheck', 'trip stopidx dts_src ts_list')
 		TripSegment = namedtuple('TripSeg', 'trip stopidx_a stopidx_b ts_list')
-		StopLabelSet = ft.partial(t.pareto.ParetoSet, lambda v: (v[-1].dts_arr, len(v) - 1))
+		StopLabel = namedtuple('StopLabel', 'dts_dep dts_arr ts_list') # dts_dep -> ts_list -> dts_arr
+		StopLabelSet = ft.partial( t.pareto.ParetoSet,
+			lambda v: (v.dts_arr, len(v.ts_list) - 1, v.dts_dep) )
 
 		tree = t.tp.TPTree() # adj-lists, with nodes being either Stop or Line objects
 		stop_labels = dict() # {stop: ts_list (all TripStops on the way from stop_src to stop)}
@@ -377,7 +379,7 @@ class TBRoutingEngine:
 			'Ensures that each TripStop is only ever processed once via trip_tails_checked index.'
 			n, i_max = len(ts_list), len(trip) - 1
 			if i >= trip_tails_checked.get((n, trip), i_max): return
-			queue.append(TripSegment(trip, i, trip_tails_checked.get((n, trip), i_max), ts_list))
+			queue.append(TripSegment(trip, i, trip_tails_checked.get((n, trip), i_max), ts_list.copy()))
 			for trip_u in lines.line_for_trip(trip)\
 					.trips_by_relation(trip, _ss.non_dominated, _ss.equal):
 				i_min = min(i, trip_tails_checked.get((n, trip_u), i_max))
@@ -414,7 +416,7 @@ class TBRoutingEngine:
 							for stop_q, dt_fp in timetable.footpaths.to_stops_from(ts.stop):
 								stop_q_arr = ts.dts_arr + dt_fp
 								if stop_q not in stop_labels: stop_labels[stop_q] = StopLabelSet()
-								stop_labels[stop_q].add(ts_list)
+								stop_labels[stop_q].add(StopLabel(dts_src, stop_q_arr, ts_list))
 
 							for transfer in transfers.from_trip_stop(ts):
 								enqueue(transfer.ts_to.trip, transfer.ts_to.stopidx, ts_list)
@@ -425,7 +427,7 @@ class TBRoutingEngine:
 				node_dst = subtree.node(stop_dst)
 				for sl in sl_set:
 					node = node_dst
-					for ts in reversed(sl):
+					for ts in reversed(sl.ts_list):
 						node_prev, node = node, subtree.node(
 							t.base.LineStop(lines.line_for_trip(ts.trip), ts.stopidx), no_path_to=node )
 						node_prev.edges_to.add(node)
