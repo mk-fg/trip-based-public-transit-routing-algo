@@ -135,7 +135,9 @@ class Trip:
 	def __hash__(self): return hash(self.id)
 	def __eq__(self, trip): return self.id == trip.id
 
-	def add(self, stop): self.stops.append(stop)
+	def add(self, stop):
+		assert self.stops[-1].dts_dep < stop.dts_arr # sanity check
+		self.stops.append(stop)
 
 	def compare(self, trip):
 		'Return SolutionStatus for this trip as compared to other trip.'

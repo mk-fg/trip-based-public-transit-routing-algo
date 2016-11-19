@@ -99,6 +99,7 @@ class TransferSet:
 
 	def add(self, transfer):
 		# Second mapping is used purely for more efficient O(1) removals
+		assert transfer.ts_from.dts_arr < transfer.ts_to.dts_dep # sanity check
 		k1 = transfer.ts_from.trip.id, transfer.ts_from.stopidx
 		if k1 not in self.set_idx: self.set_idx[k1] = dict()
 		k2 = len(self.set_idx[k1])
