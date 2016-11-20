@@ -136,7 +136,7 @@ class Trip:
 	line_id_hint = u.attr_init(None) # can be set for introspection/debugging
 
 	def __hash__(self): return hash(self.id)
-	def __eq__(self, trip): return self.id == trip.id
+	def __eq__(self, trip): return u.same_type_and_id(self, trip)
 	def __repr__(self): # mostly to avoid recursion
 		return 'Trip(id={line_id_hint}{0.id}, stops={stops})'.format(
 			self, stops=len(self.stops),
@@ -144,7 +144,7 @@ class Trip:
 
 	def add(self, stop):
 		assert stop.dts_arr <= stop.dts_dep
-		assert self.stops[-1].dts_dep < stop.dts_arr
+		assert not self.stops or self.stops[-1].dts_dep < stop.dts_arr
 		self.stops.append(stop)
 
 	def compare(self, trip):
@@ -238,7 +238,7 @@ class Journey:
 	def __len__(self): return len(self.segments)
 	def __iter__(self): return iter(self.segments)
 	def __hash__(self): return self.id
-	def __eq__(self, journey): return self.id == journey.id
+	def __eq__(self, journey): return u.same_type_and_id(self, journey)
 
 	def __getattr__(self, k):
 		if k in self._stats_cache_t._fields: return getattr(self._stats(), k)
