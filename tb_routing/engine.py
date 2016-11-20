@@ -497,7 +497,7 @@ class TBTPRoutingEngine:
 		NodeLabelCheck = namedtuple('NodeLabelChk', 'node label')
 
 		node_labels = defaultdict(ft.partial(t.pareto.ParetoSet, 'ts.dts_arr n dts_start'))
-		prio_queue = t.pareto.PrioQueue('label.ts.dts_arr label.n')
+		prio_queue = t.pareto.PrioQueue(lambda v: (-v.label.dts_start, v.label.ts.dts_arr, v.label.n))
 		results = t.pareto.QueryResultParetoSet()
 
 		# Queue starting points for each trip of the lines reachable from stop_src node
