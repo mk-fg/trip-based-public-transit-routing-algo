@@ -414,6 +414,7 @@ class TBRoutingEngine:
 
 							# Update labels for all stops reachable from this TripStop
 							for stop_q, dt_fp in timetable.footpaths.to_stops_from(ts.stop):
+								if stop_q == stop_src: continue
 								stop_q_arr = ts.dts_arr + dt_fp
 								if stop_q not in stop_labels: stop_labels[stop_q] = StopLabelSet()
 								stop_labels[stop_q].add(StopLabel(dts_src, stop_q_arr, ts_list))
@@ -425,6 +426,9 @@ class TBRoutingEngine:
 			node_src = subtree.node(stop_src, t='src')
 			for stop_dst, sl_set in stop_labels.items():
 				node_dst = subtree.node(stop_dst)
+				if stop_dst == stop_src:
+					node_prev.edges_to.add(node_src)
+					continue
 				for sl in sl_set:
 					node = node_dst
 					for ts in reversed(sl.ts_list):
@@ -463,17 +467,17 @@ class TBTPRoutingEngine:
 		while queue:
 			queue_prev, queue = queue, list()
 			for node, path in queue_prev:
-				path += [node]
+				path = path + [node]
 				for k in node.edges_to:
 					node_k = subtree[k]
 					if node_k.value != stop_src:
-						queue.append((node_k, path))
+						queue.append((node_k, path.copy()))
 						continue
 
 					# Add src->...->dst path to query_tree, reusing LineStop nodes
 					node = query_tree.node(node_k)
 					for node_next in reversed(path): # reverse() because tp_tree has dst->...->src paths
-						node_next = query_tree.node(node_next)
+						node_next = query_tree.node(node_next, no_path_to=node)
 						node.edges_to.add(node_next)
 						node = node_next
 
