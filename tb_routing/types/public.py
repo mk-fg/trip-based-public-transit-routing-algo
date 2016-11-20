@@ -128,7 +128,7 @@ class TripStop:
 				trip_id=self.trip.id if self.trip else None,
 				line_id_hint='{}:'.format(self.trip.line_id_hint) if self.trip.line_id_hint else '' )
 
-@u.attr_struct(cmp=False)
+@u.attr_struct(repr=False, cmp=False)
 class Trip:
 	stops = u.attr_init(list)
 	id = u.attr_init_id()
@@ -136,6 +136,10 @@ class Trip:
 
 	def __hash__(self): return hash(self.id)
 	def __eq__(self, trip): return self.id == trip.id
+	def __repr__(self): # mostly to avoid recursion
+		return 'Trip(id={line_id_hint}{0.id}, stops={stops})'.format(
+			self, stops=len(self.stops),
+			line_id_hint='{}:'.format(self.line_id_hint) if self.line_id_hint else '' )
 
 	def add(self, stop):
 		assert stop.dts_arr <= stop.dts_dep

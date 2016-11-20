@@ -79,6 +79,7 @@ class ParetoSet:
 	def __len__(self): return len(self.items) + len(self.items_exc)
 	def __iter__(self):
 		return iter(it.chain(map(op.attrgetter('value'), self.items), self.items_exc))
+	def __repr__(self): return '<ParetoSet {}>'.format(list(self))
 
 
 # Special-case ParetoSet used for common QueryResult values

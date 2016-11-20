@@ -290,8 +290,8 @@ def main(args=None):
 				tb.vis.dot_for_tp_subtree(query_tree, dst, dot_opts=dot_opts)
 			return
 
-		tp_router.query_profile(a, b, dts_edt, dts_ldt, query_tree)
-		print(tp_router.query_profile(a, b, dts_edt, dts_ldt))
+		journeys = tp_router.query_profile(a, b, dts_edt, dts_ldt, query_tree)
+		journeys.pretty_print()
 
 	else: parser.error('Action not implemented: {}'.format(opts.call))
 

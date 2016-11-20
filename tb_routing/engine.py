@@ -16,6 +16,55 @@ def timer(self_or_func, func=None, *args, **kws):
 	return self_or_func.timer_wrapper(func, *args, **kws)
 
 
+def jtrips_to_journeys(footpaths, stop_src, stop_dst, dts_src, results, dts_dep_criteria=False):
+	'Convert list/set of QueryResults to JourneySet with proper journey descriptions.'
+	JourneySoFar = namedtuple('JSF', 'ts_src journey prio') # unfinished journey up to ts_src
+	get_dt_fp = ft.partial(footpaths.time_delta, default=u.inf)
+
+	journeys = t.public.JourneySet()
+	for result in results:
+		jtrips = result.jtrips
+		queue = [JourneySoFar(
+			t.public.TripStop.dummy_for_stop(stop_src),
+			t.public.Journey(dts_src), prio=0 )]
+
+		for trip in it.chain(jtrips, [None]): # +1 iteration to add fp to stop_dst
+			queue_prev, queue = queue, list()
+			for jsf in queue_prev:
+
+				if not trip: # final footpath to stop_dst
+					ts_list = jsf.ts_src.trip[jsf.ts_src.stopidx+1:] if jsf.ts_src.trip else [jsf.ts_src]
+					for ts in ts_list:
+						dt_fp = get_dt_fp(ts.stop, stop_dst)
+						if dt_fp is u.inf: continue
+						jn = jsf.journey.copy()
+						if ts.trip: jn.append_trip(jsf.ts_src, ts)
+						jn.append_fp(ts.stop, stop_dst, dt_fp)
+						queue.append(JourneySoFar(None, jn, jsf.prio + dt_fp))
+
+				elif not jsf.ts_src.trip: # footpath from stop_src, not a trip
+					for ts in trip:
+						dt_fp = get_dt_fp(jsf.ts_src.stop, ts.stop)
+						if dt_fp is u.inf: continue
+						jn = jsf.journey.copy().append_fp(jsf.ts_src.stop, ts.stop, dt_fp)
+						queue.append(JourneySoFar(ts, jn, jsf.prio + dt_fp))
+
+				else: # footpath from previous trip - common case
+					for ts1, ts2 in it.product(jsf.ts_src.trip[jsf.ts_src.stopidx+1:], trip):
+						dt_fp = get_dt_fp(ts1.stop, ts2.stop)
+						if dt_fp is u.inf: continue
+						if ts1.dts_arr + dt_fp > ts2.dts_dep: continue
+						jn = jsf.journey.copy()
+						jn.append_trip(jsf.ts_src, ts1)
+						jn.append_fp(ts1.stop, ts2.stop, dt_fp)
+						queue.append(JourneySoFar(ts2, jn, jsf.prio + dt_fp))
+
+		best_jsf = min(queue, key=op.attrgetter('prio'))
+		journeys.add(best_jsf.journey, dts_dep_criteria=dts_dep_criteria)
+
+	return journeys
+
+
 class TimetableError(Exception): pass
 
 class TBRoutingEngine:
@@ -163,55 +212,6 @@ class TBRoutingEngine:
 		return transfers
 
 
-	def jtrips_to_journeys(self, stop_src, stop_dst, dts_src, results, dts_dep_criteria=False):
-		'Convert list/set of QueryResults to JourneySet with proper journey descriptions.'
-		JourneySoFar = namedtuple('JSF', 'ts_src journey prio') # unfinished journey up to ts_src
-		get_dt_fp = ft.partial(self.graph.timetable.footpaths.time_delta, default=u.inf)
-
-		journeys = t.public.JourneySet()
-		for result in results:
-			jtrips = result.jtrips
-			queue = [JourneySoFar(
-				t.public.TripStop.dummy_for_stop(stop_src),
-				t.public.Journey(dts_src), prio=0 )]
-
-			for trip in it.chain(jtrips, [None]): # +1 iteration to add fp to stop_dst
-				queue_prev, queue = queue, list()
-				for jsf in queue_prev:
-
-					if not trip: # final footpath to stop_dst
-						ts_list = jsf.ts_src.trip[jsf.ts_src.stopidx+1:] if jsf.ts_src.trip else [jsf.ts_src]
-						for ts in ts_list:
-							dt_fp = get_dt_fp(ts.stop, stop_dst)
-							if dt_fp is u.inf: continue
-							jn = jsf.journey.copy()
-							if ts.trip: jn.append_trip(jsf.ts_src, ts)
-							jn.append_fp(ts.stop, stop_dst, dt_fp)
-							queue.append(JourneySoFar(None, jn, jsf.prio + dt_fp))
-
-					elif not jsf.ts_src.trip: # footpath from stop_src, not a trip
-						for ts in trip:
-							dt_fp = get_dt_fp(jsf.ts_src.stop, ts.stop)
-							if dt_fp is u.inf: continue
-							jn = jsf.journey.copy().append_fp(jsf.ts_src.stop, ts.stop, dt_fp)
-							queue.append(JourneySoFar(ts, jn, jsf.prio + dt_fp))
-
-					else: # footpath from previous trip - common case
-						for ts1, ts2 in it.product(jsf.ts_src.trip[jsf.ts_src.stopidx+1:], trip):
-							dt_fp = get_dt_fp(ts1.stop, ts2.stop)
-							if dt_fp is u.inf: continue
-							if ts1.dts_arr + dt_fp > ts2.dts_dep: continue
-							jn = jsf.journey.copy()
-							jn.append_trip(jsf.ts_src, ts1)
-							jn.append_fp(ts1.stop, ts2.stop, dt_fp)
-							queue.append(JourneySoFar(ts2, jn, jsf.prio + dt_fp))
-
-			best_jsf = min(queue, key=op.attrgetter('prio'))
-			journeys.add(best_jsf.journey, dts_dep_criteria=dts_dep_criteria)
-
-		return journeys
-
-
 	@timer
 	def query_earliest_arrival(self, stop_src, stop_dst, dts_src):
 		'''Algorithm 4: Earliest arrival query.
@@ -274,7 +274,7 @@ class TBRoutingEngine:
 
 			n += 1
 
-		return self.jtrips_to_journeys(stop_src, stop_dst, dts_src, results)
+		return jtrips_to_journeys(tt.footpaths, stop_src, stop_dst, dts_src, results)
 
 
 	@timer
@@ -320,7 +320,7 @@ class TBRoutingEngine:
 				for trip in line:
 					dts_min, dts_max = trip[i].dts_arr - dt_fp, trip[i].dts_dep - dt_fp
 					if not (dts_edt <= u.dts_wrap(dts_max) or dts_ldt <= u.dts_wrap(dts_min)): continue
-					profile_queue.append(DepartureCriteriaCheck(trip, i, dts_max, list()))
+					profile_queue.append(DepartureCriteriaCheck(trip, i, min(dts_ldt, dts_max), list()))
 		profile_queue.sort(key=op.attrgetter('dts_src'), reverse=True) # latest-to-earliest
 
 		t_min_idx = dict()
@@ -351,7 +351,8 @@ class TBRoutingEngine:
 				n += 1
 			Q.clear()
 
-		return self.jtrips_to_journeys(stop_src, stop_dst, dts_edt, results, dts_dep_criteria=True)
+		return jtrips_to_journeys( tt.footpaths,
+			stop_src, stop_dst, dts_edt, results, dts_dep_criteria=True )
 
 
 	@timer
@@ -493,17 +494,31 @@ class TBTPRoutingEngine:
 		if query_tree is ...: query_tree = self.build_query_tree(stop_src, stop_dst)
 		if not query_tree: return list()
 
-		NodeLabel = namedtuple('NodeLabel', 'ts n journey')
+		NodeLabel = namedtuple('NodeLabel', 'dts_start ts n journey')
 		NodeLabelCheck = namedtuple('NodeLabelChk', 'node label')
 
-		# XXX: for profile query, will need dts_dep in labels and +1 loop
-		dts_dep_src = 0
-		node_labels = defaultdict(ft.partial(t.pareto.ParetoSet, 'ts.dts_arr n'))
-
+		node_labels = defaultdict(ft.partial(t.pareto.ParetoSet, 'ts.dts_arr n dts_start'))
 		prio_queue = t.pareto.PrioQueue('label.ts.dts_arr label.n')
-		prio_queue.push(NodeLabelCheck( query_tree[stop_src],
-			NodeLabel(t.public.TripStop.dummy_for_stop(stop_src, dts_dep=dts_dep_src), 0, list()) ))
+		results = t.pareto.QueryResultParetoSet()
 
+		# Queue starting points for each trip of the lines reachable from stop_src node
+		for node in query_tree[stop_src].edges_to:
+			if node.value == stop_dst:
+				# Direct src-to-dst footpath can't be easily compared to
+				#  other results, as it has no fixed departure/arrival times,
+				#  hence added here as a special "exceptional" result.
+				results.add_exception(t.base.QueryResult(None, 0, list()))
+				continue
+			ls = node.value
+			dt_fp = tt.footpaths.time_delta(stop_src, ls.line.stops[ls.stopidx])
+			for trip in ls.line:
+				ts = trip[ls.stopidx]
+				dts_min, dts_max = ts.dts_arr - dt_fp, ts.dts_dep - dt_fp
+				if not (dts_edt <= u.dts_wrap(dts_max) or dts_ldt <= u.dts_wrap(dts_min)): continue
+				prio_queue.push(NodeLabelCheck(
+					node, NodeLabel(min(dts_ldt, dts_max), ts, 0, [trip]) ))
+
+		# Main loop
 		while prio_queue:
 			node_src, label_src = prio_queue.pop()
 
@@ -513,32 +528,31 @@ class TBTPRoutingEngine:
 					stop = ls.line.stops[ls.stopidx]
 				else: ls, stop = None, node.value # ... -> stop_dst
 
-				if not label_src.ts.trip: # stop_src -> {stop_dst or line1}
-					dts = label_src.ts.dts_dep + tt.footpaths.time_delta(node_src.value, stop)
-					ts = NodeLabel(t.public.TripStop.dummy_for_stop(stop, dts_arr=dts), 0)\
-						if not ls else ls.line.earliest_trip(ls.stopidx, dts)[ls.stopidx]
-					node_label = NodeLabel(ts, label_src.n, list())
-				elif not ls: # lineN -> stop_dst
+				if not ls: # lineN -> stop_dst
 					dts = min(
 						(ts.dts_arr + tt.footpaths.time_delta(ts.stop, stop, u.inf))
 						for ts in label_src.ts.trip[label_src.ts.stopidx+1:] )
 					assert dts < u.inf # must be at least one, otherwise tp_tree is wrong
-					node_label = NodeLabel(
+					node_label = NodeLabel( label_src.dts_start,
 						t.public.TripStop.dummy_for_stop(stop, dts_arr=dts),
 						label_src.n, label_src.journey )
-				else: # lineN -> lineN+1
-					transfer = min(
-						( transfer
-							for ts in label_src.ts.trip[label_src.ts.stopidx+1:]
-							for transfer in transfers.from_trip_stop(ts)
-							if transfer.ts_to.stopidx == ls.stopidx
-								and lines.line_for_trip(transfer.ts_to.trip) == ls.line ),
-						key=op.attrgetter('ts_to.dts_arr') )
-					node_label = NodeLabel( transfer.ts_to,
-						label_src.n+1, label_src.journey + [transfer.ts_to.trip] )
 
-				if node_labels[node].add(node_label):
+				else: # lineN -> lineN+1
+					node_transfers = list( transfer
+						for ts in label_src.ts.trip[label_src.ts.stopidx+1:]
+						for transfer in transfers.from_trip_stop(ts)
+						if transfer.ts_to.stopidx == ls.stopidx
+							and lines.line_for_trip(transfer.ts_to.trip) == ls.line )
+					if node_transfers:
+						transfer = min(node_transfers, key=op.attrgetter('ts_to.dts_arr'))
+						node_label = NodeLabel( label_src.dts_start,
+							transfer.ts_to, label_src.n+1, label_src.journey + [transfer.ts_to.trip] )
+					else: node_label = None # only possible for other trips of node_src
+
+				if node_label and node_labels[node].add(node_label):
 					prio_queue.push(NodeLabelCheck(node, node_label))
 
-		# XXX: jtrips_to_journey
-		return list(node_labels[query_tree[stop_dst]])
+		for label in node_labels[query_tree[stop_dst]]:
+			results.add(t.base.QueryResult(label.ts.dts_arr, label.n, label.journey))
+		return jtrips_to_journeys( tt.footpaths,
+			stop_src, stop_dst, dts_edt, results, dts_dep_criteria=True )
