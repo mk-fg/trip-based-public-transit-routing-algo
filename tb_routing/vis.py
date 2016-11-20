@@ -55,7 +55,7 @@ def dot_for_lines(lines, dst, dot_opts=None):
 				p('{} -> {}', *map(dot_str, [name_src, name_dst]))
 
 
-def dot_for_tp_subtree(subtree, dst, dot_opts=None):
+def dot_for_tp_subtree(subtree, dst, dst_to_src=False, dot_opts=None):
 	assert subtree.prefix, 'Only subtrees are proper graphs'
 
 	def node_name(node, pre=None, pre_type=None):
@@ -74,19 +74,18 @@ def dot_for_tp_subtree(subtree, dst, dot_opts=None):
 
 	dot_opts = dot_opts or dict()
 	dot_opts.setdefault('graph', dict()).setdefault('rankdir', 'LR')
+	src_dst = ('src dst' if not dst_to_src else 'dst src').split()
 	with dot_graph(dst, dot_opts) as p:
 
-		# src/dst are reversed here,
-		#  because graph edges are directed from dst to src
 		stops_src, stops_dst = set(), set()
 		for k, node_src_set in subtree.tree.items():
 			for node_seed, node_src in node_src_set.items():
-				name_src = node_name(node_src, pre_type=dict(stop='dst'))
+				name_src = node_name(node_src, pre_type=dict(stop=src_dst[0]))
 				if isinstance(node_src.value, t.public.Stop):
 					if node_src.edges_to: stops_src.add(name_src)
-					else: stops_dst.add(node_name(node_src, pre='src'))
+					else: stops_dst.add(node_name(node_src, pre=src_dst[1]))
 				for node_dst in node_src.edges_to:
-					name_dst = node_name(node_dst, pre_type=dict(stop='src'))
+					name_dst = node_name(node_dst, pre_type=dict(stop=src_dst[1]))
 					p('{} -> {}', *map(dot_str, [name_src, name_dst]))
 
 		for subset in filter(None, [stops_src, stops_dst]):

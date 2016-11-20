@@ -281,7 +281,7 @@ def main(args=None):
 
 		if opts.dot_for_tp_subtree:
 			with tb.u.safe_replacement(opts.dot_for_tp_subtree) as dst:
-				tb.vis.dot_for_tp_subtree(tp_router.tree[a], dst, dot_opts=dot_opts)
+				tb.vis.dot_for_tp_subtree(tp_router.tree[a], dst, dst_to_src=True, dot_opts=dot_opts)
 			return
 
 		query_tree = tp_router.build_query_tree(a, b)
