@@ -16,7 +16,7 @@ def timer(self_or_func, func=None, *args, **kws):
 	return self_or_func.timer_wrapper(func, *args, **kws)
 
 
-def jtrips_to_journeys(footpaths, stop_src, stop_dst, dts_src, results, dts_dep_criteria=False):
+def jtrips_to_journeys(footpaths, stop_src, stop_dst, dts_src, results):
 	'Convert list/set of QueryResults to JourneySet with proper journey descriptions.'
 	JourneySoFar = namedtuple('JSF', 'ts_src journey prio') # unfinished journey up to ts_src
 	get_dt_fp = ft.partial(footpaths.time_delta, default=u.inf)
@@ -60,7 +60,7 @@ def jtrips_to_journeys(footpaths, stop_src, stop_dst, dts_src, results, dts_dep_
 						queue.append(JourneySoFar(ts2, jn, jsf.prio + dt_fp))
 
 		best_jsf = min(queue, key=op.attrgetter('prio'))
-		journeys.add(best_jsf.journey, dts_dep_criteria=dts_dep_criteria)
+		journeys.add(best_jsf.journey)
 
 	return journeys
 
@@ -274,7 +274,7 @@ class TBRoutingEngine:
 
 			n += 1
 
-		return jtrips_to_journeys(tt.footpaths, stop_src, stop_dst, dts_src, results)
+		return jtrips_to_journeys(timetable.footpaths, stop_src, stop_dst, dts_src, results)
 
 
 	@timer
@@ -351,8 +351,7 @@ class TBRoutingEngine:
 				n += 1
 			Q.clear()
 
-		return jtrips_to_journeys( tt.footpaths,
-			stop_src, stop_dst, dts_edt, results, dts_dep_criteria=True )
+		return jtrips_to_journeys(timetable.footpaths, stop_src, stop_dst, dts_edt, results)
 
 
 	@timer
@@ -490,7 +489,7 @@ class TBTPRoutingEngine:
 
 
 	def query_profile(self, stop_src, stop_dst, dts_edt, dts_ldt, query_tree=..., max_transfers=15):
-		tt, lines, transfers = self.graph
+		timetable, lines, transfers = self.graph
 		if query_tree is ...: query_tree = self.build_query_tree(stop_src, stop_dst)
 		if not query_tree: return list()
 
@@ -510,7 +509,7 @@ class TBTPRoutingEngine:
 				results.add_exception(t.base.QueryResult(None, 0, list()))
 				continue
 			ls = node.value
-			dt_fp = tt.footpaths.time_delta(stop_src, ls.line.stops[ls.stopidx])
+			dt_fp = timetable.footpaths.time_delta(stop_src, ls.line.stops[ls.stopidx])
 			for trip in ls.line:
 				ts = trip[ls.stopidx]
 				dts_min, dts_max = ts.dts_arr - dt_fp, ts.dts_dep - dt_fp
@@ -530,7 +529,7 @@ class TBTPRoutingEngine:
 
 				if not ls: # lineN -> stop_dst
 					dts = min(
-						(ts.dts_arr + tt.footpaths.time_delta(ts.stop, stop, u.inf))
+						(ts.dts_arr + timetable.footpaths.time_delta(ts.stop, stop, u.inf))
 						for ts in label_src.ts.trip[label_src.ts.stopidx+1:] )
 					assert dts < u.inf # must be at least one, otherwise tp_tree is wrong
 					node_label = NodeLabel( label_src.dts_start,
@@ -553,6 +552,5 @@ class TBTPRoutingEngine:
 					prio_queue.push(NodeLabelCheck(node, node_label))
 
 		for label in node_labels[query_tree[stop_dst]]:
-			results.add(t.base.QueryResult(label.ts.dts_arr, label.n, label.journey))
-		return jtrips_to_journeys( tt.footpaths,
-			stop_src, stop_dst, dts_edt, results, dts_dep_criteria=True )
+			results.add(t.base.QueryResult(label.ts.dts_arr, label.n, label.journey, label.dts_start))
+		return jtrips_to_journeys(timetable.footpaths, stop_src, stop_dst, dts_edt, results)

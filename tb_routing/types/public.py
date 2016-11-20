@@ -126,7 +126,8 @@ class TripStop:
 				' stop_id={0.stop.id}, dts_arr={0.dts_arr}, dts_dep={0.dts_dep})' )\
 			.format( self,
 				trip_id=self.trip.id if self.trip else None,
-				line_id_hint='{}:'.format(self.trip.line_id_hint) if self.trip.line_id_hint else '' )
+				line_id_hint='{}:'.format(self.trip.line_id_hint)
+					if self.trip and self.trip.line_id_hint else '' )
 
 @u.attr_struct(repr=False, cmp=False)
 class Trip:
@@ -178,38 +179,35 @@ class Timetable: keys = 'stops footpaths trips'
 JourneyTrip = namedtuple('JTrip', 'ts_from ts_to')
 JourneyFp = namedtuple('JFootpath', 'stop_from stop_to dt')
 
-@u.attr_struct(slots=False, repr=False)
+@u.attr_struct(slots=False, repr=False, cmp=False)
 class Journey:
 	dts_start = u.attr_init()
 	segments = u.attr_init(list)
 
+	_stats_cache_t = namedtuple(
+		'StatsCache', 'id dts_arr dts_dep trip_count fp_count' )
 	_stats_cache = None
+
 	def _stats(self):
 		if not self._stats_cache:
 			dts_arr = trip_count = fp_count = 0
-			dts_dep, dts_dep_fp = None, 0
+			dts_dep, dts_dep_fp, hash_vals = None, 0, list()
 			for seg in self.segments:
 				if isinstance(seg, JourneyTrip):
 					trip_count += 1
 					dts_arr = seg.ts_to.dts_arr
+					hash_vals.append(seg.ts_from.trip)
 					if dts_dep is None: dts_dep = seg.ts_from.dts_dep - dts_dep_fp
 				elif isinstance(seg, JourneyFp):
 					fp_count += 1
 					dts_arr = dts_arr + seg.dt
+					hash_vals.append(seg)
 					if dts_dep is None: dts_dep_fp += seg.dt
 			if dts_dep is None: # no trips, only footpaths
 				dts_dep, dts_arr = self.dts_start, self.dts_start + dts_arr
-			self._stats_cache = dts_arr, dts_dep, trip_count, fp_count
+			self._stats_cache = self._stats_cache_t(
+				hash(tuple(hash_vals)), dts_arr, dts_dep, trip_count, fp_count )
 		return self._stats_cache
-
-	@property
-	def dts_arr(self): return self._stats()[0]
-	@property
-	def dts_dep(self): return self._stats()[1]
-	@property
-	def trip_count(self): return self._stats()[2]
-	@property
-	def fp_count(self): return self._stats()[3]
 
 	def copy(self):
 		attrs = u.attr.asdict(self)
@@ -239,7 +237,12 @@ class Journey:
 
 	def __len__(self): return len(self.segments)
 	def __iter__(self): return iter(self.segments)
-	def __hash__(self): return id(self)
+	def __hash__(self): return self.id
+	def __eq__(self, journey): return self.id == journey.id
+
+	def __getattr__(self, k):
+		if k in self._stats_cache_t._fields: return getattr(self._stats(), k)
+		return super(Journey, self).__getattr__(k)
 
 	def __repr__(self):
 		points = list()
@@ -263,7 +266,7 @@ class Journey:
 			' [{}]'.format(stop.id) if stop.id != stop.name else ''
 
 		p( 'Journey {:x} (arrival: {}, trips: {}):',
-			id(self), u.dts_format(self.dts_arr), self.trip_count )
+			self.id, u.dts_format(self.dts_arr), self.trip_count )
 		for seg in self.segments:
 			if isinstance(seg, JourneyTrip):
 				trip_id = seg.ts_from.trip.id
@@ -288,22 +291,14 @@ class Journey:
 class JourneySet:
 	journeys = u.attr_init(set)
 
-	def add(self, journey, dts_dep_criteria=True):
-		'''Add Journey, maintaining pareto-optimality of the set.'''
-		# XXX: remove this - either use ParetoSet here or for raw QueryResults
-		for jn2 in list(self.journeys):
-			ss = journey.compare(jn2)
-			if ss is SolutionStatus.dominated or ss is SolutionStatus.equal: break
-			if ( ss is SolutionStatus.non_dominated
-				and (not dts_dep_criteria or journey.dts_arr == jn2.dts_arr)
-				and SolutionStatus.dominated ): self.journeys.remove(jn2)
-		else: self.journeys.add(journey)
+	def add(self, journey): self.journeys.add(journey)
 
 	def __len__(self): return len(self.journeys)
 	def __iter__(self): return iter(self.journeys)
 
 	def pretty_print(self, indent=0, **print_kws):
 		print(' '*indent + 'Journey set ({}):'.format(len(self.journeys)))
-		for journey in self.journeys:
+		for journey in sorted( self.journeys,
+				key=op.attrgetter('dts_dep', 'dts_arr', 'dts_start', 'id') ):
 			print()
 			journey.pretty_print(indent=indent+2, **print_kws)
