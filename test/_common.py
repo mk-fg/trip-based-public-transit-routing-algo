@@ -291,7 +291,7 @@ class GraphAssertions:
 						td = ts2.dts_dep - ts1.dts_arr
 						if 0 <= td <= max_td:
 							print('  X-arr: {} -> Y-dep: {} (delta: {:,.1f}s)'.format(
-								u.dts_format(ts1.dts_arr), u.dts_format(ts2.dts_dep), td ))
+								tb.u.dts_format(ts1.dts_arr), tb.u.dts_format(ts2.dts_dep), td ))
 					print()
 
 
@@ -310,7 +310,7 @@ class GraphAssertions:
 
 		for jn_name, jn_info in (test.journey_set or dict()).items():
 			jn_stats = struct_from_val(jn_info.stats, JourneyStats)
-			jn_start, jn_end = map(u.dts_parse, [jn_stats.start, jn_stats.end])
+			jn_start, jn_end = map(tb.u.dts_parse, [jn_stats.start, jn_stats.end])
 			ts_first, ts_last, ts_transfer = set(), set(), set()
 
 			# Check segments
@@ -374,8 +374,8 @@ class GraphAssertions:
 						print('[{}] All TripStops for {} goal-point:'.format(jn_name, k))
 						for ts in ts_set:
 							print( '  TripStop(trip_id={}, stopidx={}, stop_id={}, {}={})'\
-								.format(ts.trip.id, ts.stopidx, ts.stop.id, k, u.dts_format(getattr(ts, k))) )
-						print('[{}] Checking {} against: {}'.format(jn_name, k, u.dts_format(chk)))
+								.format(ts.trip.id, ts.stopidx, ts.stop.id, k, tb.u.dts_format(getattr(ts, k))) )
+						print('[{}] Checking {} against: {}'.format(jn_name, k, tb.u.dts_format(chk)))
 					raise_error( 'No trip-stops close to {} goal-point'
 						' in time (within {:,}s), min diff: {:,}s', k, self.dts_slack, dt_min )
 
@@ -394,7 +394,7 @@ class GraphAssertions:
 				if id(journey) in jn_matched: continue
 				if verbose: print('\n[{}] check vs journey:'.format(jn_name), journey)
 				jn_stats = struct_from_val(jn_info.stats, JourneyStats)
-				dts_dep_test, dts_arr_test = map(u.dts_parse, [jn_stats.start, jn_stats.end])
+				dts_dep_test, dts_arr_test = map(tb.u.dts_parse, [jn_stats.start, jn_stats.end])
 				dts_dep_jn, dts_arr_jn = journey.dts_dep, journey.dts_arr
 
 				time_check = max(
@@ -403,7 +403,7 @@ class GraphAssertions:
 				if verbose:
 					print(' ', 'time check - {}: {} == {} and {} == {}'.format(
 						['fail', 'pass'][time_check],
-						*map(u.dts_format, [dts_dep_test, dts_dep_jn, dts_arr_test, dts_arr_jn]) ))
+						*map(tb.u.dts_format, [dts_dep_test, dts_dep_jn, dts_arr_test, dts_arr_jn]) ))
 				if not time_check: continue
 
 				for seg_jn, seg_test in it.zip_longest(journey, jn_info.segments.items()):

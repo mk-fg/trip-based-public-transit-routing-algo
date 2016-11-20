@@ -144,7 +144,7 @@ class Trip:
 
 	def add(self, stop):
 		assert stop.dts_arr <= stop.dts_dep
-		assert not self.stops or self.stops[-1].dts_dep < stop.dts_arr
+		assert not self.stops or self.stops[-1].dts_dep <= stop.dts_arr
 		self.stops.append(stop)
 
 	def compare(self, trip):

@@ -34,7 +34,7 @@ class SimpleTestCase(unittest.TestCase):
 				stop_id, dts_arr, dts_dep = c.struct_from_val(ts, TestTripStop, as_tuple=True)
 				if not dts_arr or dts_arr == 'x': dts_arr = dts_dep
 				if not dts_dep or dts_dep == 'x': dts_dep = dts_arr
-				dts_arr, dts_dep = map(u.dts_parse, [dts_arr, dts_dep])
+				dts_arr, dts_dep = map(c.tb.u.dts_parse, [dts_arr, dts_dep])
 				stop = stops.add(types.Stop(stop_id, stop_id, 0, 0))
 				trip.add(types.TripStop(trip, stopidx, stop, dts_arr, dts_dep))
 			trips.add(trip)
@@ -54,12 +54,12 @@ class SimpleTestCase(unittest.TestCase):
 		timetable, router, checks = self.init_router()
 		checks.assert_journey_components(self.test_data)
 		goal = c.struct_from_val(self.test_data.goal, c.TestGoal)
-		goal.dts_start = u.dts_parse(goal.dts_start)
+		goal.dts_start = c.tb.u.dts_parse(goal.dts_start)
 		goal.src, goal.dst = op.itemgetter(goal.src, goal.dst)(timetable.stops)
 		if not goal.dts_latest:
 			journeys = router.query_earliest_arrival(goal.src, goal.dst, goal.dts_start)
 		else:
-			goal.dts_latest = u.dts_parse(goal.dts_latest)
+			goal.dts_latest = c.tb.u.dts_parse(goal.dts_latest)
 			journeys = router.query_profile(goal.src, goal.dst, goal.dts_start, goal.dts_latest)
 		checks.assert_journey_results(self.test_data, journeys)
 
