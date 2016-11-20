@@ -16,6 +16,7 @@ class Conf:
 	fp_dt_base = 2
 	fp_dt_max = 8
 	dt_ch = 2
+	reroll_max = 2**10
 
 # How to pick these - find 3 stop-pairs, where these should hold:
 #  1: dt_line >> dt_fp (too far to walk), 2: dt_line ~ dt_fp (rather close),
@@ -115,19 +116,27 @@ def main(args=None):
 		line_kmh = rand_int_align(*conf.line_kmh)
 		line_stops = list(map(op.itemgetter(1), sorted(line)))
 
+		trip_prev = None
 		for trip_seq in range(conf.line_trip_max_count):
 			trip_dts_start = line_dts_start + line_dts_interval * trip_seq
 			if trip_dts_start > line_dts_end: break
-			trip = types.Trip(line_id_hint='L{}'.format(line_id))
-			for stopidx, stop in enumerate(line_stops):
-				if not trip.stops: dts_arr = trip_dts_start
-				else:
-					ts = trip.stops[-1]
-					dts_arr = ts.dts_dep + divmod(
-						calc_dt_line(dist(ts.stop, stop), line_kmh), 60 )[0] * 60
-				dts_dep = dts_arr + rand_int_align(*conf.line_stop_linger)*60
-				trip.add(types.TripStop(trip, stopidx, stop, dts_arr, dts_dep))
+			for n in range(conf.reroll_max):
+				trip = types.Trip(line_id_hint='L{}'.format(line_id))
+				for stopidx, stop in enumerate(line_stops):
+					if not trip.stops: dts_arr = trip_dts_start
+					else:
+						ts = trip.stops[-1]
+						dts_arr = ts.dts_dep + divmod(
+							calc_dt_line(dist(ts.stop, stop), line_kmh), 60 )[0] * 60
+					dts_dep = dts_arr + rand_int_align(*conf.line_stop_linger)*60
+					if trip_prev and trip_prev[stopidx].dts_arr >= dts_arr: break # avoid overtaking trips
+					trip.add(types.TripStop(trip, stopidx, stop, dts_arr, dts_dep))
+				else: break
+			else:
+				raise RuntimeError( 'Failed to generate'
+					' non-overtaking trips in {:,} tries'.format(conf.reroll_max) )
 			trips.add(trip)
+			trip_prev = trip
 
 	for stop in stops: footpaths.add(stop, stop, conf.dt_ch*60)
 	for stop_a, stop_b in it.permutations(stops, 2):
