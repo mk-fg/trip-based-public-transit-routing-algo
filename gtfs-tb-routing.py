@@ -192,6 +192,7 @@ def main(args=None):
 
 	cmds = parser.add_subparsers(title='Commands', dest='call')
 
+
 	cmd = cmds.add_parser('query-earliest-arrival',
 		help='Run earliest arrival query, output resulting journey set.')
 	cmd.add_argument('stop_from', help='Stop ID to query journey from. Example: J22209723_0')
@@ -200,40 +201,60 @@ def main(args=None):
 		help='Day time to start journey at, either as HH:MM,'
 			' HH:MM:SS or just seconds int/float. Default: %(default)s')
 
+
 	cmd = cmds.add_parser('query-profile',
 		help='Run profile query, output resulting journey set.')
-	cmd.add_argument('stop_from', help='Stop ID to query journey from. Example: J22209723_0')
-	cmd.add_argument('stop_to', help='Stop ID to query journey to. Example: J2220952426_0')
-	cmd.add_argument('day_time_earliest', nargs='?', default='00:00',
+
+	group = cmd.add_argument_group('Query parameters')
+	group.add_argument('stop_from', help='Stop ID to query journey from. Example: J22209723_0')
+	group.add_argument('stop_to', help='Stop ID to query journey to. Example: J2220952426_0')
+	group.add_argument('day_time_earliest', nargs='?', default='00:00',
 		help='Earliest day time to start journey(s) at, either as HH:MM,'
 			' HH:MM:SS or just seconds int/float. Default: %(default)s')
-	cmd.add_argument('day_time_latest', nargs='?', default='24:00',
+	group.add_argument('day_time_latest', nargs='?', default='24:00',
 		help='Latest day time to start journey(s) at, either as HH:MM,'
 			' HH:MM:SS or just seconds int/float. Default: %(default)s')
-	cmd.add_argument('-m', '--max-transfers',
+
+	group = cmd.add_argument_group('Limits')
+	group.add_argument('-m', '--max-transfers',
 		type=int, metavar='n', default=15,
 		help='Max number of transfers (i.e. interchanges)'
 			' between journey trips allowed in the results. Default: %(default)s')
 
+
 	cmd = cmds.add_parser('query-transfer-patterns',
-		help='Build/load Transfer-Patterns trie and run queries on it.'
-			' Not implemented.') # XXX
-	cmd.add_argument('stop_from', help='Stop ID to query journey from. Example: J22209723_0')
-	cmd.add_argument('stop_to', help='Stop ID to query journey to. Example: J2220952426_0')
-	cmd.add_argument('--tree-cache', metavar='path',
-		help='Pickle cache-file to load (if exists)'
-			' or save (if missing) resulting Transfer-Patterns'
-			' prefix-tree from/to (see arXiv:1607.01299v2 paper).')
-	cmd.add_argument('--dot-for-tp-subtree', metavar='path',
-		help='Dump TB-TP subtree graph for specified'
-			' stop_from (in graphviz dot format) to a file and exit.')
-	cmd.add_argument('--dot-for-tp-query-tree', metavar='path',
-		help='Dump TB-TP query tree graph for specified'
-			' stop_from/stop_to pair (in graphviz dot format) to a file and exit.')
-	cmd.add_argument('-m', '--max-transfers',
+		help='Build/load Transfer-Patterns trie and run queries on it.')
+
+	group = cmd.add_argument_group('Query parameters')
+	group.add_argument('stop_from', help='Stop ID to query journey from. Example: J22209723_0')
+	group.add_argument('stop_to', help='Stop ID to query journey to. Example: J2220952426_0')
+	group.add_argument('day_time_earliest', nargs='?', default='00:00',
+		help='Earliest day time to start journey(s) at, either as HH:MM,'
+			' HH:MM:SS or just seconds int/float. Default: %(default)s')
+	group.add_argument('day_time_latest', nargs='?', default='24:00',
+		help='Latest day time to start journey(s) at, either as HH:MM,'
+			' HH:MM:SS or just seconds int/float. Default: %(default)s')
+
+	group = cmd.add_argument_group('Limits')
+	group.add_argument('-m', '--max-transfers',
 		type=int, metavar='n', default=15,
 		help='Max number of transfers (i.e. interchanges)'
 			' between journey trips allowed in the results. Default: %(default)s')
+
+	group = cmd.add_argument_group('Graph options')
+	group.add_argument('--tree-cache', metavar='path',
+		help='Pickle cache-file to load (if exists)'
+			' or save (if missing) resulting Transfer-Patterns'
+			' prefix-tree from/to (see arXiv:1607.01299v2 paper).')
+
+	group = cmd.add_argument_group('Misc/debug options')
+	group.add_argument('--dot-for-tp-subtree', metavar='path',
+		help='Dump TB-TP subtree graph for specified'
+			' stop_from (in graphviz dot format) to a file and exit.')
+	group.add_argument('--dot-for-tp-query-tree', metavar='path',
+		help='Dump TB-TP query tree graph for specified'
+			' stop_from/stop_to pair (in graphviz dot format) to a file and exit.')
+
 
 	opts = parser.parse_args(sys.argv[1:] if args is None else args)
 
@@ -272,11 +293,12 @@ def main(args=None):
 		journeys.pretty_print()
 
 	elif opts.call == 'query-transfer-patterns':
-		dts_edt, dts_ldt = 0, 24*3600 # XXX
+		dts_edt, dts_ldt = tb.u.dts_parse(opts.day_time_earliest), tb.u.dts_parse(opts.day_time_latest)
 		a, b = timetable.stops[opts.stop_from], timetable.stops[opts.stop_to]
+
 		cache_path = opts.tree_cache
 		tp_tree = tb.u.pickle_load(cache_path) if cache_path else None
-		tp_router = router.build_tp_engine(tp_tree)
+		tp_router = router.build_tp_engine(tp_tree, max_transfers=opts.max_transfers)
 		if not tp_tree and cache_path: tb.u.pickle_dump(tp_router.tree, cache_path)
 
 		if opts.dot_for_tp_subtree:
