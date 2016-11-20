@@ -72,6 +72,14 @@ class Lines:
 			for stopidx, ts in enumerate(line[0]):
 				self.idx_stop.setdefault(ts.stop, list()).append((stopidx, line))
 			for trip in line: self.idx_trip[trip] = line
+
+			# Resolve any potential line.id conflicts for named lines
+			if line.id in self.idx_id and line is not self.idx_id[line.id]:
+				if self.idx_id[line.id]:
+					line2 = self.idx_id[line.id]
+					line2.id = '{}.{:x}'.format(line2.id, id(line2))
+					self.idx_id[line2.id], self.idx_id[line.id] = line2, None
+				line.id = '{}.{:x}'.format(line.id, id(line))
 			self.idx_id[line.id] = line
 
 	def lines_with_stop(self, stop):
@@ -81,7 +89,7 @@ class Lines:
 	def line_for_trip(self, trip): return self.idx_trip[trip]
 
 	def __getitem__(self, line_id): return self.idx_id[line_id]
-	def __iter__(self): return iter(self.idx_id.values())
+	def __iter__(self): return iter(filter(None, self.idx_id.values()))
 	def __len__(self): return len(set(map(id, self.idx_trip.values())))
 
 
