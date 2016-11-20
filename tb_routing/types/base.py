@@ -13,7 +13,8 @@ class Line:
 			such strict ordering impossible), trips should be split into different lines.'''
 
 	def __init__(self, *trips): self.set_idx = list(trips)
-	def __repr__(self): return '<Line {:x}>'.format(self.id)
+	def __repr__(self):
+		return '<Line {}>'.format('{:x}'.format(self.id) if isinstance(self.id, int) else self.id)
 
 	@property
 	def stops(self):
