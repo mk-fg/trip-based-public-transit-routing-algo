@@ -292,6 +292,8 @@ class TBRoutingEngine:
 
 		def enqueue(trip, i, n, jtrips, _ss=t.public.SolutionStatus):
 			i_max = len(trip) - 1 # for the purposes of "infinity" here
+			# Labels here are set for "n, trip" instead of "trip", so that
+			#  they can be reused after n jumps back to 0 (see main loop below).
 			if i >= R.get((n, trip), i_max): return
 			Q.setdefault(n, list()).append(
 				TripSegment(trip, i, R.get((n, trip), i_max), jtrips.copy()) )
@@ -308,6 +310,10 @@ class TBRoutingEngine:
 		for line_infos in lines_to_dst.values(): # so that all "i > b" come up first
 			line_infos.sort(reverse=True, key=op.itemgetter(0))
 
+		# Same as with earliest-arrival, queue set of trips reachable from stop_src,
+		#  but instead of queuing all checks (one for each trip) with same departure time,
+		#  queue one DepartureCriteriaCheck for every departure time of each trip from
+		#  these reachable stops.
 		profile_queue = list()
 		for stop_q, dt_fp in timetable.footpaths.to_stops_from(stop_src):
 			if stop_q == stop_src: dt_fp = 0
@@ -321,10 +327,17 @@ class TBRoutingEngine:
 					dts_min, dts_max = trip[i].dts_arr - dt_fp, trip[i].dts_dep - dt_fp
 					if not (dts_edt <= u.dts_wrap(dts_max) or dts_ldt <= u.dts_wrap(dts_min)): continue
 					profile_queue.append(DepartureCriteriaCheck(trip, i, min(dts_ldt, dts_max), list()))
+		# Latest departures are processed first because labels (R) are reused for the whole query,
+		#  and journeys with later-dep-time dominate earlier, so they are processed first and all
+		#  trips with earlier departure not improving on arrival time (not passing check in enqueue())
+		#  will be suboptimal anyway, hence skipped.
 		profile_queue.sort(key=op.attrgetter('dts_src'), reverse=True) # latest-to-earliest
 
-		t_min_idx = dict()
+		t_min_idx = dict() # indexed by n, so that it can be reused, same as R.
 		for dts_src, checks in it.groupby(profile_queue, op.attrgetter('dts_src')):
+			# Each iteration of this loop is same as an earliest-arrival query,
+			#  with starting set of trips (with same departure time) pulled from profile_queue.
+			# Labels for trips (R) can be reused, cutting down amount of work for 2+ checks dramatically.
 			n = 0
 			for trip, stopidx, dts_src, jtrips in checks: enqueue(trip, stopidx, n, jtrips)
 
@@ -349,7 +362,7 @@ class TBRoutingEngine:
 							enqueue(transfer.ts_to.trip, transfer.ts_to.stopidx, n+1, jtrips)
 
 				n += 1
-			Q.clear()
+			Q.clear() # to flush n > max_transfers leftovers there
 
 		return jtrips_to_journeys(timetable.footpaths, stop_src, stop_dst, dts_edt, results)
 
