@@ -152,6 +152,7 @@ Requirements
 
 - Python 3.x
 - `attrs <https://attrs.readthedocs.io/en/stable/>`_
+- (only if gtfs calendar.txt is used) `pytz <http://pytz.sourceforge.net/>`_
 - (for tests only) `PyYAML <http://pyyaml.org/>`_
 - (for Python<3.4 only) `pathlib2 <https://pypi.python.org/pypi/pathlib2/>`_
 - (for Python<3.4 only) `enum34 <https://pypi.python.org/pypi/enum34/>`_

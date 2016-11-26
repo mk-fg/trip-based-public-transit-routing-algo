@@ -170,7 +170,7 @@ class Trips(UserList):
 
 
 @u.attr_struct
-class Timetable: keys = 'stops footpaths trips'
+class Timetable: keys = 'dt_start stops footpaths trips'
 
 
 

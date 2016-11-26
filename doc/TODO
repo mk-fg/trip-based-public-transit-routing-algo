@@ -1,6 +1,8 @@
 
 - Implement calendar processing and checks during queries.
 
+- Parse gtfs frequences.txt, if available.
+
 - For trips that span across multiple days, it should be possible to wrap
   arrival time back to e.g. 1:20 and jump to next-day trips from there, yet
   don't have that time considered to be "optimal" and trip itself "overtaking"

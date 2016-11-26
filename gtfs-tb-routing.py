@@ -1,17 +1,34 @@
 #!/usr/bin/env python3
 
 import itertools as it, operator as op, functools as ft
-from collections import namedtuple, defaultdict
+from collections import namedtuple, defaultdict, OrderedDict
 from pathlib import Path
-import os, sys, re, csv, math, time
+import os, sys, re, csv, math, time, datetime
 
 import tb_routing as tb
+
+try: import pytz
+except ImportError: pytz = None
 
 
 @tb.u.attr_struct(vals_to_attrs=True)
 class Conf:
+
+	# Filtering for parser will only produce timetable data (trips/footpaths)
+	#  for specific days, with ones after parse_start_date having 24h*N time offsets.
+	# Trips starting on before parse_start_date (and up to parse_days_pre) will also
+	#  be processed, so that e.g. journeys starting at midnight on that day can use them.
+	parse_start_date = None # datetime.date object or YYYYMMDD string
+	parse_days = 2 # should be >= 1
+	parse_days_pre = 1 # also >= 1
+
+	# gtfs_timezone is only used if parse_start_date is set.
+	# It is important to account for stuff like daylight saving time, leap seconds, etc
+	# To understand why, answer a question:
+	#  how many seconds are between 0:00 and 6:00? (not always 6*3600)
+	gtfs_timezone = 'Europe/London' # pytz zone name or datetime.timezone
+
 	group_stops_into_stations = False # use "parent_station" to group all stops into one under its id
-	stop_linger_time_default = 5*60 # used if departure-time is missing
 
 	# Options for footpath-generation - not used if transfers.txt is non-empty
 	dt_ch = 2*60 # fixed time-delta overhead for changing trips (i.e. p->p footpaths)
@@ -21,6 +38,69 @@ class Conf:
 
 log = tb.u.get_logger('gtfs-cli')
 
+
+@tb.u.attr_struct
+class GTFSTimeOffset:
+	keys = 'd h m s'
+
+	@classmethod
+	def parse(cls, ts_str):
+		if ':' not in ts_str: return
+		ts_list = list(int(v.strip()) for v in ts_str.split(':'))
+		if len(ts_list) == 2: ts_list.append(0)
+		days, hours = divmod(ts_list[0], 24)
+		return cls(days, hours, ts_list[1], ts_list[2])
+
+	@property
+	def flat(self):
+		return (self.d * 24 + self.h) * 3600 + self.m * 60 + self.s
+
+	def apply_to_datetime(self, dt):
+		d, h, m, s = u.attr.astuple(self)
+		if d > 0:
+			# Daylight savings jump must only be accounted for on the first day
+			#  of the offset, and adding timedelta with >1 *days* will get that wrong.
+			# Assuming that won't be an issue with adding delta with >24 *hours* though.
+			# XXX: test assumption above
+			dt, d = dt + timedelta(days=1), d - 1
+		dt = dt.replace(hours=h, minutes=m, seconds=s)
+		if d > 0: dt += timedelta(hours=d * 24)
+		return dt
+
+class CalendarException(enum.Enum): added, removed = '1', '2'
+
+
+def calculate_dts(dt_start, dt, offset_arr, offset_dep):
+	if dt is None:
+		# Either both dt_start and dt are None or neither,
+		#  otherwise dts values won't make sense according to one of them.
+		assert dt_start is None
+		return offset_arr.flat, offset_dep.flat
+	if not offset_arr:
+		if not trip: # first stop of the trip - arrival ~ departure
+			if offset_dep: offset_arr = offset_dep
+			else: raise ValueError('Missing arrival/departure times for trip stop: {}'.format(ts))
+		else: offset_arr = trip[-1].offset_dep # "scheduled based on the nearest preceding timed stop"
+	if offset_arr_prev is not None:
+		if offset_arr < offset_arr_prev: offset_arr.days += 1 # assuming bogus 24:00 -> 00:00 wrapping
+	offset_arr_prev = offset_arr
+	if not offset_dep: offset_dep = offset_arr
+	assert offset_arr and offset_dep
+	dt_arr, dt_dep = (o.apply_to_datetime(dt) for o in [offset_arr, offset_dep])
+	dts_arr, dts_dep = ((dt - dt_start).total_seconds() for dt in [dt_arr, dt_dep])
+	return dts_arr, dts_dep
+
+def footpath_dt(stop_a, stop_b, dt_base, speed_kmh, math=math):
+	'''Calculate footpath time-delta (dt) between two stops,
+		based on their lon/lat distance (using Haversine Formula) and walking-speed constant.'''
+	# Alternative: use UTM coordinates and KDTree (e.g. scipy) or spatial dbs
+	lon1, lat1, lon2, lat2 = (
+		math.radians(float(v)) for v in
+		[stop_a.lon, stop_a.lat, stop_b.lon, stop_b.lat] )
+	km = 6367 * 2 * math.asin(math.sqrt(
+		math.sin((lat2 - lat1)/2)**2 +
+		math.cos(lat1) * math.cos(lat2) * math.sin((lon2 - lon1)/2)**2 ))
+	return dt_base + km / speed_kmh
 
 def iter_gtfs_tuples(gtfs_dir, filename, empty_if_missing=False):
 	log.debug('Processing gtfs file: {}', filename)
@@ -37,24 +117,9 @@ def iter_gtfs_tuples(gtfs_dir, filename, empty_if_missing=False):
 			except TypeError:
 				log.debug('Skipping bogus CSV line (file: {}): {!r}', p, line)
 
-def parse_gtfs_dts(ts_str):
-	if ':' not in ts_str: return
-	return sum((mul * int(v)) for mul, v in zip([3600, 60, 1], ts_str.split(':')))
-
-def footpath_dt(stop_a, stop_b, dt_base, speed_kmh, math=math):
-	'''Calculate footpath time-delta (dt) between two stops,
-		based on their lon/lat distance (using Haversine Formula) and walking-speed constant.'''
-	# Alternative: use UTM coordinates and KDTree (e.g. scipy) or spatial dbs
-	lon1, lat1, lon2, lat2 = (
-		math.radians(float(v)) for v in
-		[stop_a.lon, stop_a.lat, stop_b.lon, stop_b.lat] )
-	km = 6367 * 2 * math.asin(math.sqrt(
-		math.sin((lat2 - lat1)/2)**2 +
-		math.cos(lat1) * math.cos(lat2) * math.sin((lon2 - lon1)/2)**2 ))
-	return dt_base + km / speed_kmh
-
 def parse_gtfs_timetable(gtfs_dir, conf):
 	'Parse Timetable from GTFS data directory.'
+	# XXX: split this into a separate submodule
 	# Stops/footpaths that don't belong to trips are discarded here
 	types = tb.t.public
 
@@ -74,42 +139,90 @@ def parse_gtfs_timetable(gtfs_dir, conf):
 		dict((k, stop) for k, (k_set, stop) in stop_dict.items()),
 		dict((k, stop_sets[k_set]) for k, (k_set, stop) in stop_dict.items()) )
 
+	dt_start = service_days = None
+	date_map = date_min_str = date_max_str = None
+	if conf.parse_start_date:
+		assert conf.parse_days >= 1 and conf.parse_days_pre >= 1
+		assert pytz, 'pytz is required when processing calendar.txt'
+		weekday_cols = 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'
+		date_min, gtfs_date_fmt = conf.parse_start_date, '%Y%m%d'
+		if isinstance(conf.parse_start_date, str):
+			date_min = datetime.date.strptime(date_min, gtfs_date_fmt)
+		date_min -= datetime.timedelta(days=conf.parse_days_pre)
+		date_map = list( (date_min + datetime.timedelta(n))
+			for n in range(conf.parse_days + conf.parse_days_pre) )
+		date_min_str, date_max_str = (d.strftime(gtfs_date_fmt) for d in [date_min, date_map[-1]])
+		date_map = OrderedDict((d.strftime(gtfs_date_fmt), d) for d in date_map)
+
+		dt_start = conf.gtfs_timezone
+		if isinstance(dt_start, str): dt_start = pytz.timezone(dt_start)
+		dt_start = datetime.datetime(date_min.year, date_min.month, date_min.day, tzinfo=dt_start)
+
+		service_exceptions = defaultdict(ft.partial(defaultdict, set))
+		for s in iter_gtfs_tuples(gtfs_dir, 'calendar_dates'):
+			service_exceptions[s.service_id][CalendarException(s.exception_type)].add(s.date)
+
+		service_days = dict() # {service_id (int): datetimes (seq)}
+		for s in iter_gtfs_tuples(gtfs_dir, 'calendar'):
+			if not (s.start_date >= date_max_str and s.end_date <= date_min_str): continue
+			days = service_days.setdefault(s.service_id, dict())
+
+			parse_days = dict((date_str, (False, date)) for date_str, date in date_map.items())
+			for t, date_str in service_exceptions[s.service_id]:
+				if not (date_min_str <= date_str <= date_max_str): continue
+				if t == CalendarException.added:
+					parse_days[date_str] = True, datetime.date.strptime(date_str, gtfs_date_fmt)
+				elif t == CalendarException.removed: parse_days.pop(date_str, None)
+				else: raise ValueError(t)
+
+			for date_str, (exc, date) in sorted(parse_days.items()):
+				if not exc:
+					if date_str < s.start_date: continue
+					elif date_str > s.end_date: break
+				weekday_value = getattr(s, weekday_cols[date.weekday()])
+				if not (weekday_value and int(weekday_value)): continue
+				days[date_str] = datetime.datetime(date.year, date.month, date.day, tzinfo=dt_start)
+
+		if not service_offsets:
+			log.debug('No services were found to be operational on specified days')
+
 	trip_stops = defaultdict(list)
 	for t in iter_gtfs_tuples(gtfs_dir, 'stop_times'): trip_stops[t.trip_id].append(t)
 
 	trips, stops = types.Trips(), types.Stops()
 	for t in iter_gtfs_tuples(gtfs_dir, 'trips'):
-		trip, dts_arr_prev = types.Trip(), None
-		for stopidx, ts in enumerate(
-				sorted(trip_stops[t.trip_id], key=lambda t: int(t.stop_sequence)) ):
-			dts_arr, dts_dep = map(parse_gtfs_dts, [ts.arrival_time, ts.departure_time])
-			if not dts_arr:
-				if not trip: # first stop of the trip - arrival ~ departure
-					if dts_dep: dts_arr = dts_dep - conf.stop_linger_time_default
-					else: continue
-				else: dts_arr = trip[-1].dts_dep # "scheduled based on the nearest preceding timed stop"
-			if dts_arr_prev is not None:
-				if dts_arr < dts_arr_prev: dts_arr += 24 * 3600 # assuming bogus 24:00 -> 00:00 wrapping
-			dts_arr_prev = dts_arr
-			if not dts_dep: dts_dep = dts_arr + conf.stop_linger_time_default
-			stop = stops.add(stop_dict[ts.stop_id])
-			trip.add(types.TripStop(trip, stopidx, stop, dts_arr, dts_dep))
-		if trip: trips.add(trip)
+		if service_days is not None:
+			days = service_days.get(t.service_id)
+			if not days: continue
+		else: days = [None]
+		for dt in days:
+			trip, dts_arr_prev = types.Trip(), None
+			for stopidx, ts in enumerate(
+					sorted(trip_stops[t.trip_id], key=lambda t: int(t.stop_sequence)) ):
+				dts_arr, dts_dep = calculate_dts( dt_start,
+					*map(GTFSTimeOffset.parse, [ts.arrival_time, ts.departure_time]) )
+				stop = stops.add(stop_dict[ts.stop_id])
+				trip.add(types.TripStop(trip, stopidx, stop, dts_arr, dts_dep))
+				if trip: trips.add(trip)
 
 	footpaths, fp_samestop_count, fp_synth = types.Footpaths(), 0, False
 	get_stop_set = lambda stop_id: list(filter(stops.get, stop_sets.get(stop_id, list())))
-	for t in it.chain.from_iterable(
-			iter_gtfs_tuples(gtfs_dir, name, empty_if_missing=True)
-			for name in ['transfers', 'links'] ):
-		stops_from, stops_to = map(get_stop_set, [t.from_stop_id, t.to_stop_id])
-		if not (stops_from and stops_to): continue
-		dt = tb.u.get_any(t._asdict(), 'min_transfer_time', 'link_secs')
-		if dt is None:
-			log.debug('Missing transfer time value in CSV tuple: {}', t)
-			continue
-		for stop_from, stop_to in it.product(stops_from, stops_to):
-			if stop_from == stop_to: fp_samestop_count += 1
-			footpaths.add(stop_from, stop_to, int(dt))
+	for src_type in 'transfers', 'links':
+		for t in iter_gtfs_tuples(gtfs_dir, name, empty_if_missing=True):
+			# XXX: make footpaths properly dts-dependent
+			# Current hack is to simply ok any footpath that falls into date range
+			if date_map and src_type == 'links'\
+				and not (s.start_date >= date_max_str and s.end_date <= date_min_str): continue
+			stops_from, stops_to = map(get_stop_set, [t.from_stop_id, t.to_stop_id])
+			if not (stops_from and stops_to): continue
+			dt = tb.u.get_any(t._asdict(), 'min_transfer_time', 'link_secs')
+			if dt is None:
+				log.debug('Missing transfer time value in CSV tuple: {}', t)
+				continue
+			for stop_from, stop_to in it.product(stops_from, stops_to):
+				if stop_from == stop_to: fp_samestop_count += 1
+				footpaths.add(stop_from, stop_to, int(dt))
+
 	if not len(footpaths):
 		log.debug('No transfers/links data found, generating synthetic footpaths from lon/lat')
 		fp_synth, fp_dt = True, ft.partial( footpath_dt,
@@ -129,7 +242,7 @@ def parse_gtfs_timetable(gtfs_dir, conf):
 				footpaths.add(stop, stop, conf.dt_ch)
 				fp_samestop_count += 1
 
-	return types.Timetable(stops, footpaths, trips)
+	return types.Timetable(dt_start, stops, footpaths, trips)
 
 
 def calc_timer(func, *args, log=tb.u.get_logger('timer'), **kws):
