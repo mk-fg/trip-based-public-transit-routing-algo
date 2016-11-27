@@ -1,7 +1,7 @@
 import itertools as it, operator as op, functools as ft
 from pathlib import Path
 from collections import UserList
-import os, sys, logging, datetime
+import os, sys, logging, datetime, base64
 import contextlib, tempfile, stat
 
 import attr
@@ -21,6 +21,23 @@ class LogStyleAdapter(logging.LoggerAdapter):
 		self.logger._log(level, LogMessage(msg, args, kws), (), log_kws)
 
 get_logger = lambda name: LogStyleAdapter(logging.getLogger(name))
+
+
+def b64(data):
+	return base64.urlsafe_b64encode(data).rstrip(b'=').decode()
+
+def get_uid_token(chars=4):
+	assert chars * 6 % 8 == 0, chars
+	return b64(os.urandom(chars * 6 // 8))
+
+def log_lines(log_func, lines, log_func_last=False):
+	if isinstance(lines, str): lines = list(line.rstrip() for line in lines.rstrip().split('\n'))
+	uid = get_uid_token()
+	for n, line in enumerate(lines, 1):
+		if isinstance(line, str): line = '[{}] {}', uid, line
+		else: line = ['[{}] {}'.format(uid, line[0])] + list(line[1:])
+		if log_func_last and n == len(lines): log_func_last(*line)
+		else: log_func(*line)
 
 
 def attr_struct(cls=None, vals_to_attrs=False, defaults=..., **kws):

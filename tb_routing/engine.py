@@ -116,6 +116,9 @@ class TBRoutingEngine:
 			dts_chk = -1
 			for ts in trip: # sanity check
 				if not (ts.dts_arr >= dts_chk and ts.dts_arr <= ts.dts_dep):
+					u.log_lines( self.log.debug,
+						[('Time jumps backwards for stops of the trip: {}', trip)]
+						+ list(('  {}', ts) for ts in trip) )
 					raise TimetableError('Time jumps backwards for stops of the trip', trip)
 				dts_chk = ts.dts_dep
 			line_trips[line_stops(trip)].append(trip)
