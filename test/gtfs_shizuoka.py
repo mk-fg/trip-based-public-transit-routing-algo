@@ -25,7 +25,7 @@ class GTFS_Shizuoka_20161013(unittest.TestCase):
 		self.checks.assert_journey_components(test)
 
 		goal = c.struct_from_val(test.goal, c.TestGoal)
-		goal.dts_start = c.tb.u.dts_parse(goal.dts_start)
+		goal.dts_start = self.timetable.dts_parse(goal.dts_start)
 		goal.src, goal.dst = op.itemgetter(goal.src, goal.dst)(self.timetable.stops)
 
 		journeys = self.router.query_earliest_arrival(goal.src, goal.dst, goal.dts_start)

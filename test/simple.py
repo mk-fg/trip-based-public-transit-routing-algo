@@ -45,7 +45,7 @@ class SimpleTestCase(unittest.TestCase):
 			footpaths.add(src, dst, dt * 60)
 		for stop in stops: footpaths.add(stop, stop, self.dt_ch)
 
-		timetable = types.Timetable(None, stops, footpaths, trips)
+		timetable = types.Timetable(stops, footpaths, trips)
 		router = c.tb.engine.TBRoutingEngine(timetable, timer_func=c.gtfs_cli.calc_timer)
 		checks = c.GraphAssertions(router.graph)
 		return timetable, router, checks
@@ -54,12 +54,12 @@ class SimpleTestCase(unittest.TestCase):
 		timetable, router, checks = self.init_router()
 		checks.assert_journey_components(self.test_data)
 		goal = c.struct_from_val(self.test_data.goal, c.TestGoal)
-		goal.dts_start = c.tb.u.dts_parse(goal.dts_start)
+		goal.dts_start = timetable.dts_parse(goal.dts_start)
 		goal.src, goal.dst = op.itemgetter(goal.src, goal.dst)(timetable.stops)
 		if not goal.dts_latest:
 			journeys = router.query_earliest_arrival(goal.src, goal.dst, goal.dts_start)
 		else:
-			goal.dts_latest = c.tb.u.dts_parse(goal.dts_latest)
+			goal.dts_latest = timetable.dts_parse(goal.dts_latest)
 			journeys = router.query_profile(goal.src, goal.dst, goal.dts_start, goal.dts_latest)
 		checks.assert_journey_results(self.test_data, journeys)
 

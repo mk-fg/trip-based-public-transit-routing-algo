@@ -67,10 +67,6 @@ class GTFSTimeOffset:
 		if d > 0: dt += timedelta(hours=d * 24)
 		return dt
 
-@u.attr_struct(defaults=None)
-class TimespanInfo:
-	keys = 'dt_start dt_min service_days date_map date_min_str date_max_str'
-
 ServiceCalendarEntry = namedtuple('SCE', 'date_start date_end weekdays')
 
 
@@ -114,11 +110,11 @@ def get_timespan_info( svc_calendar, svc_exceptions,
 
 		# Apply any service-specific exceptions
 		parse_days = dict((date_str, (False, date)) for date_str, date in date_map.items())
-		for t, date_str in svc_exceptions[svc_id]:
+		for exc, date_str in svc_exceptions[svc_id]:
 			if not (date_min_str <= date_str <= date_max_str): continue
-			if t == CalendarException.added:
+			if exc == CalendarException.added:
 				parse_days[date_str] = True, datetime.date.strptime(date_str, gtfs_date_fmt)
-			elif t == CalendarException.removed: parse_days.pop(date_str, None)
+			elif exc == CalendarException.removed: parse_days.pop(date_str, None)
 			else: raise ValueError(t)
 
 		# Add datetime to svc_days for each date that service is operating on
@@ -140,7 +136,8 @@ def get_timespan_info( svc_calendar, svc_exceptions,
 	if not svc_days:
 		log.debug('No services were found to be operational on specified days')
 
-	return TimespanInfo(dt_start, dt_min, svc_days, date_map, date_min_str, date_max_str)
+	return t.public.TimespanInfo(
+		dt_start, dt_min, svc_days, date_map, date_min_str, date_max_str )
 
 def calculate_dts(dt_min, dt, offset_arr, offset_dep):
 	'''Calculate relative timestamps ("dts" floats of seconds) for
@@ -195,7 +192,7 @@ def parse_timetable(gtfs_dir, conf):
 
 		timespan_info = get_timespan_info( svc_calendar, svc_exceptions,
 			conf.parse_start_date, conf.parse_days, conf.parse_days_pre, conf.gtfs_timezone )
-	else: timespan_info = TimespanInfo(dt_start=None)
+	else: timespan_info = t.public.TimespanInfo()
 
 	### Stops (incl. grouping by station)
 	stop_dict, stop_sets = dict(), dict() # {id: stop}, {id: station_stops}
@@ -276,4 +273,4 @@ def parse_timetable(gtfs_dir, conf):
 				footpaths.add(stop, stop, conf.dt_ch)
 				fp_samestop_count += 1
 
-	return t.public.Timetable(timespan_info.dt_start, stops, footpaths, trips)
+	return t.public.Timetable(stops, footpaths, trips, timespan_info)

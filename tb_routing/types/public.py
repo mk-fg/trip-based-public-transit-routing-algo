@@ -169,8 +169,24 @@ class Trips(UserList):
 		return (sum(len(t) for t in self) / len(self))
 
 
+@u.attr_struct(defaults=None)
+class TimespanInfo:
+	keys = 'dt_start dt_min service_days date_map date_min_str date_max_str'
+
 @u.attr_struct
-class Timetable: keys = 'dt_start stops footpaths trips'
+class Timetable:
+	stops = u.attr_init()
+	footpaths = u.attr_init()
+	trips = u.attr_init()
+	timespan = u.attr_init(TimespanInfo)
+
+	def dts_relative(self, dts, dt=None):
+		if not self.timespan.dt_min: return dts
+		if not dt: dt = self.timespan.dt_start
+		return dts + (dt - self.timespan.dt_min).total_seconds()
+
+	def dts_parse(self, day_time_str, dt=None):
+		return self.dts_relative(u.dts_parse(day_time_str), dt)
 
 
 

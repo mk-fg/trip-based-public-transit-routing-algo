@@ -310,7 +310,7 @@ class GraphAssertions:
 
 		for jn_name, jn_info in (test.journey_set or dict()).items():
 			jn_stats = struct_from_val(jn_info.stats, JourneyStats)
-			jn_start, jn_end = map(tb.u.dts_parse, [jn_stats.start, jn_stats.end])
+			jn_start, jn_end = map(graph.timetable.dts_parse, [jn_stats.start, jn_stats.end])
 			ts_first, ts_last, ts_transfer = set(), set(), set()
 
 			# Check segments
@@ -394,7 +394,7 @@ class GraphAssertions:
 				if id(journey) in jn_matched: continue
 				if verbose: print('\n[{}] check vs journey:'.format(jn_name), journey)
 				jn_stats = struct_from_val(jn_info.stats, JourneyStats)
-				dts_dep_test, dts_arr_test = map(tb.u.dts_parse, [jn_stats.start, jn_stats.end])
+				dts_dep_test, dts_arr_test = map(graph.timetable.dts_parse, [jn_stats.start, jn_stats.end])
 				dts_dep_jn, dts_arr_jn = journey.dts_dep, journey.dts_arr
 
 				time_check = max(

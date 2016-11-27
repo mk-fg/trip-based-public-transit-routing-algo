@@ -65,8 +65,9 @@ def main(args=None):
 			' Can produce smaller graphs that would be easier to query.')
 
 	group = parser.add_argument_group('Timetable calendar options')
-	group.add_argument('-d', '--parse-day', metavar='YYYYMMDD',
-		help='Parse GTFS calendar data and only build'
+	group.add_argument('-d', '--day', metavar='YYYYMMDD',
+		help='Specific date when trip is taking place.'
+			'Will also make script parse GTFS calendar data and only build'
 				' timetable for trips/footpaths/links active on specified day and its vicinity.'
 			' Without this option, all trips/etc will be used regardless of calendar info.'
 			' See also --parse-days-after and --parse-days-before options.')
@@ -169,7 +170,7 @@ def main(args=None):
 
 	if opts.stops_to_stations: conf.group_stops_into_stations = True
 	conf.parse_start_date, conf.parse_days, conf.parse_days_pre =\
-		opts.parse_day, opts.parse_days_after, opts.parse_days_before
+		opts.day, opts.parse_days_after, opts.parse_days_before
 	timetable, router = init_gtfs_router( opts.gtfs_dir,
 		opts.cache, conf=conf, conf_engine=conf_engine,
 		path_timetable=opts.timetable, timer_func=calc_timer )
@@ -184,19 +185,19 @@ def main(args=None):
 		return
 
 	if opts.call == 'query-earliest-arrival':
-		dts_start = tb.u.dts_parse(opts.day_time)
+		dts_start = timetable.dts_parse(opts.day_time)
 		a, b = timetable.stops[opts.stop_from], timetable.stops[opts.stop_to]
 		journeys = router.query_earliest_arrival(a, b, dts_start)
 		journeys.pretty_print()
 
 	elif opts.call == 'query-profile':
-		dts_edt, dts_ldt = tb.u.dts_parse(opts.day_time_earliest), tb.u.dts_parse(opts.day_time_latest)
+		dts_edt, dts_ldt = map(timetable.dts_parse, [opts.day_time_earliest, opts.day_time_latest])
 		a, b = timetable.stops[opts.stop_from], timetable.stops[opts.stop_to]
 		journeys = router.query_profile(a, b, dts_edt, dts_ldt, max_transfers=opts.max_transfers)
 		journeys.pretty_print()
 
 	elif opts.call == 'query-transfer-patterns':
-		dts_edt, dts_ldt = tb.u.dts_parse(opts.day_time_earliest), tb.u.dts_parse(opts.day_time_latest)
+		dts_edt, dts_ldt = map(timetable.dts_parse, [opts.day_time_earliest, opts.day_time_latest])
 		a, b = timetable.stops[opts.stop_from], timetable.stops[opts.stop_to]
 
 		cache_path = opts.tree_cache
