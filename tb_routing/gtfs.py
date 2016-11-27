@@ -19,8 +19,8 @@ class GTFSConf:
 	# Trips starting on before parse_start_date (and up to parse_days_pre) will also
 	#  be processed, so that e.g. journeys starting at midnight on that day can use them.
 	parse_start_date = None # datetime.datetime object or YYYYMMDD string
-	parse_days = 2 # should be >= 1
-	parse_days_pre = 1 # also >= 1
+	parse_days = 2 # should be >= 1 and up to max days limit for journey (probably 1-2)
+	parse_days_pre = 1 # also >= 1 would make sense
 
 	# gtfs_timezone is only used if parse_start_date is set.
 	# It is important to account for stuff like daylight saving time, leap seconds, etc
@@ -103,7 +103,7 @@ def get_timespan_info( svc_calendar, svc_exceptions,
 	dt_min = dt_start - datetime.timedelta(days=parse_days_pre)
 	date_map = list(
 		(dt_min + datetime.timedelta(days=n))
-		for n in range(parse_days + parse_days_pre) )
+		for n in range(parse_days + parse_days_pre + 1) )
 	date_min_str, date_max_str = (d.strftime(gtfs_date_fmt) for d in [dt_min, date_map[-1]])
 	date_map = OrderedDict((d.strftime(gtfs_date_fmt), d.date()) for d in date_map)
 
@@ -182,7 +182,6 @@ def parse_timetable(gtfs_dir, conf):
 
 	### Calculate processing timespan / calendar and map of services operating there
 	if conf.parse_start_date:
-		assert conf.parse_days >= 1 and conf.parse_days_pre >= 1
 		weekday_cols = 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'
 
 		svc_calendar = dict()
