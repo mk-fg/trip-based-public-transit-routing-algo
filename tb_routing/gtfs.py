@@ -96,7 +96,7 @@ def get_timespan_info( svc_calendar, svc_exceptions,
 
 	date_min = parse_start_date
 	if isinstance(parse_start_date, str):
-		date_min = datetime.date.strptime(date_min, gtfs_date_fmt)
+		date_min = datetime.datetime.strptime(date_min, gtfs_date_fmt).date()
 	date_min -= datetime.timedelta(days=parse_days_pre)
 	date_map = list( (date_min + datetime.timedelta(n))
 		for n in range(parse_days + parse_days_pre) )
@@ -135,7 +135,6 @@ def get_timespan_info( svc_calendar, svc_exceptions,
 		log.debug('No services were found to be operational on specified days')
 
 	return TimespanInfo(dt_start, svc_days, date_map, date_min_str, date_max_str)
-
 
 def calculate_dts(dt_start, dt, offset_arr, offset_dep):
 	'''Calculate relative timestamps ("dts" floats of seconds) for
@@ -184,12 +183,12 @@ def parse_timetable(gtfs_dir, conf):
 		weekday_cols = 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'
 
 		svc_calendar = dict()
-		for s in iter_gtfs_tuples(gtfs_dir, 'calendar'):
+		for s in iter_gtfs_tuples(gtfs_dir, 'calendar', empty_if_missing=True):
 			weekdays = list(bool(int(getattr(s, k))) for k in weekday_cols)
 			svc_calendar[s.service_id] = ServiceCalendarEntry(s.start_date, s.end_date, weekdays)
 
 		svc_exceptions = defaultdict(ft.partial(defaultdict, set))
-		for s in iter_gtfs_tuples(gtfs_dir, 'calendar_dates'):
+		for s in iter_gtfs_tuples(gtfs_dir, 'calendar_dates', empty_if_missing=True):
 			svc_exceptions[s.service_id][CalendarException(s.exception_type)].add(s.date)
 
 		timespan_info = get_timespan_info( svc_calendar, svc_exceptions,

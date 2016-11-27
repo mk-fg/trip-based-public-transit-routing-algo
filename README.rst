@@ -101,7 +101,7 @@ Example usage::
   ./gtfs-tb-routing.py ... 0.85s user 0.04s system 99% cpu 0.894 total
 
 
-  % ./gtfs-tb-routing.py -c gtfs-shizuoka.cache.pickle -d gtfs-shizuoka \
+  % ./gtfs-tb-routing.py gtfs-shizuoka -c gtfs-shizuoka.cache.pickle \
       query-profile J22209723_0 J2220952426_0
 
   Journey set (8):
@@ -130,8 +130,8 @@ Example usage::
 Note that second query is much faster due to ``--cache gtfs-shizuoka.cache.pickle``
 option, which allows to reuse pre-calculated data from the first query.
 
-Use ``-d/--debug`` option to see pre-calculation progress (useful for large
-datasets) and misc other stats and logging.
+Use ``--debug`` option to see pre-calculation progress (useful for large datasets)
+and misc other stats and logging.
 
 
 Routing engine

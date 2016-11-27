@@ -46,12 +46,16 @@ def init_gtfs_router( path, cache_path=None,
 
 
 def main(args=None):
+	conf = tb.gtfs.GTFSConf()
+	conf_engine = tb.engine.EngineConf(
+		log_progress_for={'lines', 'pre-initial-set', 'pre-reduction', 'transfer-patterns'} )
+
 	import argparse
 	parser = argparse.ArgumentParser(
 		description='Simple implementation of trip-based graph-db and algorithms.')
 	parser.add_argument('gtfs_dir', help='Path to gtfs data directory to build graph from.')
 
-	group = parser.add_argument_group('Graph options')
+	group = parser.add_argument_group('Basic timetable/parser options')
 	group.add_argument('-c', '--cache', metavar='path',
 		help='Pickle cache-file to load (if exists)'
 			' or save (if missing) resulting graph data from/to.')
@@ -59,6 +63,26 @@ def main(args=None):
 		help='Convert/translate GTFS "stop" ids to "parent_station" ids,'
 				' i.e. group all stops on the station into a single one.'
 			' Can produce smaller graphs that would be easier to query.')
+
+	group = parser.add_argument_group('Timetable calendar options')
+	group.add_argument('-d', '--parse-day', metavar='YYYYMMDD',
+		help='Parse GTFS calendar data and only build'
+				' timetable for trips/footpaths/links active on specified day and its vicinity.'
+			' Without this option, all trips/etc will be used regardless of calendar info.'
+			' See also --parse-days-after and --parse-days-before options.')
+	group.add_argument('--parse-days-after',
+		type=int, default=conf.parse_days, metavar='n',
+		help='In addition to date specified with --parse-day,'
+				' process trips for specified number of days after it.'
+			' This is important to build journeys which e.g. start on 23:00 and end on'
+				' the next day - will be impossible to build these without info from there.'
+			' Default: %(default)s')
+	group.add_argument('--parse-days-before',
+		type=int, default=conf.parse_days_pre, metavar='n',
+		help='Similar to --parse-days-after, but for loading data from N previous days.'
+			' For journeys starting at e.g. 00:10, many trips starting'
+				' on a previous day (e.g. just 10min ago) can be useful.'
+			' Default: %(default)s')
 
 	group = parser.add_argument_group('Misc/debug options')
 	group.add_argument('-t', '--timetable', action='store_true',
@@ -68,7 +92,7 @@ def main(args=None):
 	group.add_argument('--dot-opts', metavar='yaml-data',
 		help='Options for graphviz graph/nodes/edges to use with all'
 			' --dot-for-* commands, as a YAML mappings. Example: {graph: {rankdir: LR}}')
-	group.add_argument('-d', '--debug', action='store_true', help='Verbose operation mode.')
+	group.add_argument('--debug', action='store_true', help='Verbose operation mode.')
 
 	cmds = parser.add_subparsers(title='Commands', dest='call')
 
@@ -143,12 +167,11 @@ def main(args=None):
 		datefmt='%Y-%m-%d %H:%M:%S',
 		level=tb.u.logging.DEBUG if opts.debug else tb.u.logging.WARNING )
 
-	conf = tb.gtfs.GTFSConf()
 	if opts.stops_to_stations: conf.group_stops_into_stations = True
-	conf_engine = tb.engine.EngineConf(
-		log_progress_for={'lines', 'pre-initial-set', 'pre-reduction', 'transfer-patterns'} )
+	conf.parse_start_date, conf.parse_days, conf.parse_days_pre =\
+		opts.parse_day, opts.parse_days_after, opts.parse_days_before
 	timetable, router = init_gtfs_router( opts.gtfs_dir,
-		opts.cache, conf_engine=conf_engine,
+		opts.cache, conf=conf, conf_engine=conf_engine,
 		path_timetable=opts.timetable, timer_func=calc_timer )
 
 	dot_opts = dict()

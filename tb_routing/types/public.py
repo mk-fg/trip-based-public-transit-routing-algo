@@ -101,7 +101,7 @@ class Footpaths:
 
 	def stat_mean_dt(self):
 		dt_sum, dt_count, ch_count = self._stats()
-		return dt_sum / dt_count
+		return (dt_sum / dt_count) if dt_count else 0
 	def stat_same_stop_count(self): return self._stats()[2]
 
 	def __len__(self): return self._stats()[1]
