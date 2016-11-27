@@ -23,15 +23,19 @@ class LogStyleAdapter(logging.LoggerAdapter):
 get_logger = lambda name: LogStyleAdapter(logging.getLogger(name))
 
 
-def attr_struct(cls=None, vals_to_attrs=False, **kws):
-	if not cls: return ft.partial(attr_struct, vals_to_attrs=vals_to_attrs, **kws)
+def attr_struct(cls=None, vals_to_attrs=False, defaults=..., **kws):
+	if not cls:
+		return ft.partial( attr_struct,
+			vals_to_attrs=vals_to_attrs, defaults=defaults, **kws )
 	try:
 		keys = cls.keys
 		del cls.keys
 	except AttributeError: keys = list()
 	else:
+		attr_kws = dict()
+		if defaults is not ...: attr_kws['default'] = defaults
 		if isinstance(keys, str): keys = keys.split()
-		for k in keys: setattr(cls, k, attr.ib())
+		for k in keys: setattr(cls, k, attr.ib(**attr_kws))
 	if vals_to_attrs:
 		for k, v in vars(cls).items():
 			if k.startswith('_') or k in keys or callable(v): continue
