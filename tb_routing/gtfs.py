@@ -18,7 +18,7 @@ class GTFSConf:
 	#  for specific days, with ones after parse_start_date having 24h*N time offsets.
 	# Trips starting on before parse_start_date (and up to parse_days_pre) will also
 	#  be processed, so that e.g. journeys starting at midnight on that day can use them.
-	parse_start_date = None # datetime.date object or YYYYMMDD string
+	parse_start_date = None # datetime.datetime object or YYYYMMDD string
 	parse_days = 2 # should be >= 1
 	parse_days_pre = 1 # also >= 1
 
@@ -63,13 +63,13 @@ class GTFSTimeOffset:
 			# Assuming that won't be an issue with adding delta with >24 *hours* though.
 			# XXX: test assumption above
 			dt, d = dt + timedelta(days=1), d - 1
-		dt = dt.replace(hours=h, minutes=m, seconds=s)
+		dt = dt.replace(hour=h, minute=m, second=s)
 		if d > 0: dt += timedelta(hours=d * 24)
 		return dt
 
 @u.attr_struct(defaults=None)
 class TimespanInfo:
-	keys = 'dt_start service_days date_map date_min_str date_max_str'
+	keys = 'dt_start dt_min service_days date_map date_min_str date_max_str'
 
 ServiceCalendarEntry = namedtuple('SCE', 'date_start date_end weekdays')
 
@@ -93,23 +93,21 @@ def get_timespan_info( svc_calendar, svc_exceptions,
 		parse_start_date, parse_days, parse_days_pre,
 		gtfs_timezone, gtfs_date_fmt='%Y%m%d' ):
 	'Return TimespanInfo with map of services to days when they are operating within it.'
+	if isinstance(gtfs_timezone, str):
+		assert pytz, ['pytz is required for processing timezone spec', gtfs_timezone]
+		gtfs_timezone = pytz.timezone(gtfs_timezone)
 
-	date_min = parse_start_date
+	dt_start = parse_start_date
 	if isinstance(parse_start_date, str):
-		date_min = datetime.datetime.strptime(date_min, gtfs_date_fmt).date()
-	date_min -= datetime.timedelta(days=parse_days_pre)
-	date_map = list( (date_min + datetime.timedelta(n))
+		dt_start = datetime.datetime.strptime(dt_start, gtfs_date_fmt).replace(tzinfo=gtfs_timezone)
+	dt_min = dt_start - datetime.timedelta(days=parse_days_pre)
+	date_map = list(
+		(dt_min + datetime.timedelta(days=n))
 		for n in range(parse_days + parse_days_pre) )
-	date_min_str, date_max_str = (d.strftime(gtfs_date_fmt) for d in [date_min, date_map[-1]])
-	date_map = OrderedDict((d.strftime(gtfs_date_fmt), d) for d in date_map)
+	date_min_str, date_max_str = (d.strftime(gtfs_date_fmt) for d in [dt_min, date_map[-1]])
+	date_map = OrderedDict((d.strftime(gtfs_date_fmt), d.date()) for d in date_map)
 
-	dt_start = gtfs_timezone
-	if isinstance(dt_start, str):
-		assert pytz, ['pytz is required for processing timezone spec', dt_start]
-		dt_start = pytz.timezone(dt_start)
-	dt_start = datetime.datetime(date_min.year, date_min.month, date_min.day, tzinfo=dt_start)
-
-	svc_days = dict() # {service_id (int): datetimes (seq)}
+	svc_days = dict() # {service_id: {date_str: datetime}}
 	for svc_id, sce in svc_calendar.items():
 		if not (sce.date_start >= date_max_str and sce.date_end <= date_min_str): continue
 		days = svc_days.setdefault(svc_id, dict())
@@ -128,36 +126,41 @@ def get_timespan_info( svc_calendar, svc_exceptions,
 			if not exc:
 				if date_str < s.date_start: continue
 				elif date_str > s.date_end: break
-			if not sce.weekdays[date.weekday()]: continue
-			days[date_str] = datetime.datetime(date.year, date.month, date.day, tzinfo=dt_start)
+				if not sce.weekdays[date.weekday()]: continue
+			days[date_str] = datetime.datetime(date.year, date.month, date.day, tzinfo=gtfs_timezone)
+
+	# Add days for exception-only services, not mentioned in svc_calendar at all
+	for svc_id, excs in svc_exceptions.items():
+		if svc_id in svc_calendar: continue
+		for date_str in excs[CalendarException.added]:
+			if not (date_min_str <= date_str <= date_max_str): continue
+			dt = datetime.datetime.strptime(date_str, gtfs_date_fmt)
+			svc_days.setdefault(svc_id, dict())[date_str] = dt.replace(tzinfo=gtfs_timezone)
 
 	if not svc_days:
 		log.debug('No services were found to be operational on specified days')
 
-	return TimespanInfo(dt_start, svc_days, date_map, date_min_str, date_max_str)
+	return TimespanInfo(dt_start, dt_min, svc_days, date_map, date_min_str, date_max_str)
 
-def calculate_dts(dt_start, dt, offset_arr, offset_dep):
+def calculate_dts(dt_min, dt, offset_arr, offset_dep):
 	'''Calculate relative timestamps ("dts" floats of seconds) for
 			arrival/departure GTFSTimeOffsets on a specific day (`dt` datetime).
-		"relative" to `dt_start` datetime - start of the parsed interval.
-		If both dt_start and dt are passed as None, offsets are simply taken from 0.'''
+		"relative" to `dt_min` datetime - start of the parsed interval.
+		If both dt_min and dt are passed as None, offsets are simply taken from 0.'''
 	if dt is None:
-		# Either both dt_start and dt are None or neither,
+		# Either both dt_min and dt are None or neither,
 		#  otherwise dts values won't make sense according to one of them.
-		assert dt_start is None
+		assert dt_min is None
 		return offset_arr.flat, offset_dep.flat
 	if not offset_arr:
 		if not trip: # first stop of the trip - arrival ~ departure
 			if offset_dep: offset_arr = offset_dep
 			else: raise ValueError('Missing arrival/departure times for trip stop: {}'.format(ts))
 		else: offset_arr = trip[-1].offset_dep # "scheduled based on the nearest preceding timed stop"
-	if offset_arr_prev is not None:
-		if offset_arr < offset_arr_prev: offset_arr.days += 1 # assuming bogus 24:00 -> 00:00 wrapping
-	offset_arr_prev = offset_arr
 	if not offset_dep: offset_dep = offset_arr
 	assert offset_arr and offset_dep
 	dt_arr, dt_dep = (o.apply_to_datetime(dt) for o in [offset_arr, offset_dep])
-	dts_arr, dts_dep = ((dt - dt_start).total_seconds() for dt in [dt_arr, dt_dep])
+	dts_arr, dts_dep = ((dt - dt_min).total_seconds() for dt in [dt_arr, dt_dep])
 	return dts_arr, dts_dep
 
 def footpath_dt(stop_a, stop_b, dt_base, speed_kmh, math=math):
@@ -221,13 +224,16 @@ def parse_timetable(gtfs_dir, conf):
 		if timespan_info.dt_start:
 			days = timespan_info.service_days.get(s.service_id)
 			if not days: continue
-		else: days = [None]
-		for dt in days:
-			trip, dts_arr_prev = t.public.Trip(), None
+		else: days = {None: None}
+		for dt in days.values():
+			trip, offset_arr_prev = t.public.Trip(), None
 			for stopidx, ts in enumerate(
 					sorted(trip_stops[s.trip_id], key=lambda s: int(s.stop_sequence)) ):
-				dts_arr, dts_dep = calculate_dts( timespan_info.dt_start, dt,
-					*map(GTFSTimeOffset.parse, [ts.arrival_time, ts.departure_time]) )
+				offset_arr, offset_dep = map(GTFSTimeOffset.parse, [ts.arrival_time, ts.departure_time])
+				if offset_arr_prev is not None:
+					if offset_arr < offset_arr_prev: offset_arr.d += 1 # assuming bogus 24:00 -> 00:00
+				offset_arr_prev = offset_arr
+				dts_arr, dts_dep = calculate_dts(timespan_info.dt_min, dt, offset_arr, offset_dep)
 				stop = stops.add(stop_dict[ts.stop_id])
 				trip.add(t.public.TripStop(trip, stopidx, stop, dts_arr, dts_dep))
 			if trip: trips.add(trip)
