@@ -39,9 +39,39 @@ class GTFSConf:
 
 class CalendarException(enum.Enum): added, removed = '1', '2'
 
+def dt_adjust(dt, d=0, h=0, m=0, s=0, subtract=False):
+	'''Apply timedelta objects in a sensible manner,
+			where adding N days only adjusts date, never time.
+		Note that in general: "dt - delta != dt + (-delta)",
+			hence `subtract` and negative values are only allowed in `d`.'''
+	if isinstance(d, datetime.timedelta):
+		d, h, m, s= d.days, d.hours, d.minutes, d.seconds
+		assert not any([d.microseconds, d.milliseconds, d.weeks])
+	if h == m == s == 0: # adding days should only adjust date, not time
+		if subtract:
+			d = -d
+			assert d <= 0
+		if d == 0: return dt
+		dt = (dt + datetime.timedelta(d)) if d > 0 else (dt - datetime.timedelta(d))
+		return dt.tzinfo.localize(dt.replace(tzinfo=None))
+	else:
+		assert not d, 'Adjusting both date by days= and time - probably a bug'
+		assert h >= 0 and m >= 0 and s >= 0
+		delta = datetime.timedelta(hours=h, minutes=m, seconds=s)
+		return dt.tzinfo.normalize((dt + delta) if not subtract else (dt - delta))
+
 @u.attr_struct
 class GTFSTimeOffset:
 	keys = 'd h m s'
+
+	# In GTFS stop_times.txt "00:20" can actually mean 01:20 in localtime
+	#  or 23:20 of the previous day, when DST-related time jump happens.
+	#
+	# Quote:
+	#  The time is measured from "noon minus 12h"
+	#   (effectively midnight, except for days on which daylight
+	#   savings time changes occur) at the beginning of the service date.
+	# https://developers.google.com/transit/gtfs/reference/stop_times-file
 
 	@classmethod
 	def parse(cls, ts_str):
@@ -56,16 +86,12 @@ class GTFSTimeOffset:
 		return (self.d * 24 + self.h) * 3600 + self.m * 60 + self.s
 
 	def apply_to_datetime(self, dt):
+		'''Returns datetime with this offset applied to date specified in `dt`.
+			Any time set there will be disregarded.'''
 		d, h, m, s = u.attr.astuple(self)
-		if d > 0:
-			# Daylight savings jump must only be accounted for on the first day
-			#  of the offset, and adding timedelta with >1 *days* will get that wrong.
-			# Assuming that won't be an issue with adding delta with >24 *hours* though.
-			# XXX: test assumption above
-			dt, d = dt + timedelta(days=1), d - 1
-		dt = dt.replace(hour=h, minute=m, second=s)
-		if d > 0: dt += timedelta(hours=d * 24)
-		return dt
+		dt = dt_adjust(dt, d=d).replace(hour=12, minute=0, second=0) # noon of specified day
+		dt = dt_adjust(dt, h=12, subtract=True) # "noon minus 12h"
+		return dt_adjust(dt, h=h, m=m, s=s) # "noon minus 12h" + time offset
 
 ServiceCalendarEntry = namedtuple('SCE', 'date_start date_end weekdays')
 
@@ -92,13 +118,13 @@ def get_timespan_info( svc_calendar, svc_exceptions,
 	if isinstance(gtfs_timezone, str):
 		assert pytz, ['pytz is required for processing timezone spec', gtfs_timezone]
 		gtfs_timezone = pytz.timezone(gtfs_timezone)
+	dt_cls, tz = datetime.datetime, gtfs_timezone
 
 	dt_start = parse_start_date
 	if isinstance(parse_start_date, str):
-		dt_start = datetime.datetime.strptime(dt_start, gtfs_date_fmt).replace(tzinfo=gtfs_timezone)
-	dt_min = dt_start - datetime.timedelta(days=parse_days_pre)
-	date_map = list(
-		(dt_min + datetime.timedelta(days=n))
+		dt_start = tz.localize(dt_cls.strptime(dt_start, gtfs_date_fmt))
+	dt_min = dt_adjust(dt_start, d=parse_days_pre, subtract=True)
+	date_map = list( dt_adjust(dt_min, d=n)
 		for n in range(parse_days + parse_days_pre + 1) )
 	date_min_str, date_max_str = (d.strftime(gtfs_date_fmt) for d in [dt_min, date_map[-1]])
 	date_map = OrderedDict((d.strftime(gtfs_date_fmt), d.date()) for d in date_map)
@@ -113,7 +139,7 @@ def get_timespan_info( svc_calendar, svc_exceptions,
 		for exc, date_str in svc_exceptions[svc_id]:
 			if not (date_min_str <= date_str <= date_max_str): continue
 			if exc == CalendarException.added:
-				parse_days[date_str] = True, datetime.date.strptime(date_str, gtfs_date_fmt)
+				parse_days[date_str] = True, date.strptime(date_str, gtfs_date_fmt)
 			elif exc == CalendarException.removed: parse_days.pop(date_str, None)
 			else: raise ValueError(t)
 
@@ -123,15 +149,15 @@ def get_timespan_info( svc_calendar, svc_exceptions,
 				if date_str < s.date_start: continue
 				elif date_str > s.date_end: break
 				if not sce.weekdays[date.weekday()]: continue
-			days[date_str] = datetime.datetime(date.year, date.month, date.day, tzinfo=gtfs_timezone)
+			days[date_str] = tz.localize(dt_cls(date.year, date.month, date.day))
 
 	# Add days for exception-only services, not mentioned in svc_calendar at all
 	for svc_id, excs in svc_exceptions.items():
 		if svc_id in svc_calendar: continue
 		for date_str in excs[CalendarException.added]:
 			if not (date_min_str <= date_str <= date_max_str): continue
-			dt = datetime.datetime.strptime(date_str, gtfs_date_fmt)
-			svc_days.setdefault(svc_id, dict())[date_str] = dt.replace(tzinfo=gtfs_timezone)
+			dt = tz.localize(dt_cls.strptime(date_str, gtfs_date_fmt))
+			svc_days.setdefault(svc_id, dict())[date_str] = dt
 
 	if not svc_days:
 		log.debug('No services were found to be operational on specified days')

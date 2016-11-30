@@ -74,45 +74,6 @@ class dmap(ChainMap):
 			if k in m: del m[k]
 
 
-class FixedOffsetTZ(datetime.tzinfo):
-	_offset = _name = None
-	@classmethod
-	def from_offset(cls, name=None, delta=None, hh=None, mm=None):
-		self = cls()
-		if delta is None: delta = datetime.timedelta(hours=hh or 0, minutes=mm or 0)
-		self._name, self._offset = name, delta
-		return self
-	def utcoffset(self, dt): return self._offset
-	def tzname(self, dt): return self._name
-	def dst(self, dt, ZERO=datetime.timedelta(0)): return ZERO
-	def __repr__(self): return '<FixedOffset {!r}>'.format(self._name)
-
-TZ_UTC = FixedOffsetTZ.from_offset('UTC')
-
-def parse_iso8601( spec, tz_default=TZ_UTC,
-		_re=re.compile(
-			r'(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})'
-			r'(?::(?P<s>\d{2}(\.\d+)?))?\s*(?P<tz>Z|[-+]\d{2}:\d{2})?' ) ):
-	m = _re.search(spec)
-	if not m: raise ValueError(m)
-	if m.group('tz'):
-		tz = m.group('tz')
-		if tz == 'Z': tz = TZ_UTC
-		else:
-			k = {'+':1,'-':-1}[tz[0]]
-			hh, mm = ((int(n) * k) for n in tz[1:].split(':', 1))
-			tz = FixedOffsetTZ.from_offset(hh=hh, mm=mm)
-	else: tz = tz_default
-	ts_list = list(map(int, m.groups()[:5]))
-	ts_list.append(
-		0 if not m.group('s') else int(m.group('s').split('.', 1)[0]) )
-	ts = datetime.datetime.strptime(
-		'{:04d}-{:02d}-{:02d} {:02d}:{:02d}:{:02d}'.format(*ts_list),
-		'%Y-%m-%d %H:%M:%S' )
-	assert tz
-	ts = ts.replace(tzinfo=tz)
-	return ts
-
 def yaml_load(stream, dict_cls=OrderedDict, loader_cls=yaml.SafeLoader):
 	if not hasattr(yaml_load, '_cls'):
 		class CustomLoader(loader_cls): pass
