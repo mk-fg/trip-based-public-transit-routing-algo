@@ -304,7 +304,7 @@ class GraphAssertions:
 				elif seg.type == 'fp':
 					try: graph.timetable.footpaths.between(a, b)
 					except KeyError:
-						raise_error('No footpath-transfer found between src/dst')
+						raise_error('No footpath-transfer found between src/dst: {} -> {}', a, b)
 					for ts in ts_transfer_chk:
 						if ts.stop is not a: continue
 						ts_transfer_found = True
