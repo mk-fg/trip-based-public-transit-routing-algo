@@ -35,6 +35,7 @@ class GTFSConf:
 	footpath_dt_base = 2*60 # footpath_dt = dt_base + km / speed_kmh
 	footpath_speed_kmh = 5 / 3600
 	footpath_dt_max = 7*60 # all footpaths longer than that are discarded as invalid
+	footpath_gen_thresholds = 0, 0.5
 
 
 class CalendarException(enum.Enum): added, removed = '1', '2'
@@ -280,23 +281,25 @@ def parse_timetable(gtfs_dir, conf):
 				if stop_from == stop_to: fp_samestop_count += 1
 				footpaths.add(stop_from, stop_to, int(dt))
 
-	if not len(footpaths):
-		log.debug('No transfers/links data found, generating synthetic footpaths from lon/lat')
-		fp_synth, fp_dt = True, ft.partial( footpath_dt,
-			dt_base=conf.footpath_dt_base, speed_kmh=conf.footpath_speed_kmh )
-		for stop_a, stop_b in it.permutations(list(stops), 2):
-			footpaths.add(stop_a, stop_b, fp_dt(stop_a, stop_b))
-		footpaths.discard_longer(conf.footpath_dt_max)
-	if fp_samestop_count < len(stops) / 2:
-		if not fp_synth:
-			log.debug(
-				'Generating missing same-stop footpaths (dt_ch={}),'
-					' because source data seem to have very few of them - {} for {} stops',
-				conf.dt_ch, fp_samestop_count, len(stops) )
-		for stop in stops:
-			try: footpaths.between(stop, stop)
-			except KeyError:
-				footpaths.add(stop, stop, conf.dt_ch)
-				fp_samestop_count += 1
+	if len(stops):
+		fp_min, fp_min_samestop = conf.footpath_gen_thresholds
+		if len(footpaths) / len(stops) <= fp_min:
+			log.debug('No transfers/links data found, generating synthetic footpaths from lon/lat')
+			fp_synth, fp_dt = True, ft.partial( footpath_dt,
+				dt_base=conf.footpath_dt_base, speed_kmh=conf.footpath_speed_kmh )
+			for stop_a, stop_b in it.permutations(list(stops), 2):
+				footpaths.add(stop_a, stop_b, fp_dt(stop_a, stop_b))
+			footpaths.discard_longer(conf.footpath_dt_max)
+		if fp_samestop_count / len(stops) <= fp_min_samestop:
+			if not fp_synth:
+				log.debug(
+					'Generating missing same-stop footpaths (dt_ch={}),'
+						' because source data seem to have very few of them - {} for {} stops',
+					conf.dt_ch, fp_samestop_count, len(stops) )
+			for stop in stops:
+				try: footpaths.between(stop, stop)
+				except KeyError:
+					footpaths.add(stop, stop, conf.dt_ch)
+					fp_samestop_count += 1
 
 	return t.public.Timetable(stops, footpaths, trips, timespan_info)
