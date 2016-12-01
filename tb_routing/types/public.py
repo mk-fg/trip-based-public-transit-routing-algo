@@ -50,61 +50,118 @@ class Stops:
 	def __iter__(self): return iter(self.set_idx.values())
 
 
+@u.attr_struct(cmp=False)
+class Footpath:
+	keys = 'dt dts_min dts_max'
+	def __hash__(self): return hash((self.dt, self.dts_min, self.dts_max))
+	def __eq__(self, fp): return hash(self) == hash(fp)
+
 class Footpaths:
+	# Never returns Footpath tuples, only best (minimal) time deltas for stops
+
+	_stats_cache_t = namedtuple(
+		'StatsCache', 'dt_sum dt_count ch_count fp_count fp_keys' )
+	_stats_cache = None
 
 	def __init__(self):
 		self.set_idx_to, self.set_idx_from = dict(), dict()
 
-	def add(self, stop_a, stop_b, dt):
-		self.set_idx_to.setdefault(stop_a, dict())[stop_b] = dt
-		self.set_idx_from.setdefault(stop_b, dict())[stop_a] = dt
+	def __getstate__(self):
+		state = self.__dict__
+		state.pop('_stats_cache', None)
+		return state
+
+	def _add_to_idx(self, fp, idx, k1, k2):
+		fp_list = idx.setdefault(k1, dict()).setdefault(k2, list())
+		fp_list.append(fp)
+		fp_list.sort()
+
+	def add(self, stop_a, stop_b, dt, dts_min=0, dts_max=u.inf):
+		fp = Footpath(dt, dts_min, dts_max)
+		self._add_to_idx(fp, self.set_idx_to, stop_a, stop_b)
+		self._add_to_idx(fp, self.set_idx_from, stop_b, stop_a)
 		self._stats_cache = None
+
+	def _discard_longer_from_idx(self, dt_max, idx, k1, k2):
+		try: fp_list = idx[k1][k2]
+		except KeyError: return
+		for n, fp in enumerate(list(fp_list)):
+			if fp.dt > dt_max: fp_list.pop(n)
+		if not fp_list:
+			del idx[k1][k2]
+			if not idx[k1]: del idx[k1]
 
 	def discard_longer(self, dt_max):
 		items = sorted(
-			((v,(k1,k2)) for k1,v1 in self.set_idx_to.items() for k2,v in v1.items()),
+			( (fp.dt,(k1,k2))
+				for k1,v1 in self.set_idx_to.items()
+				for k2,fp_set in v1.items() for fp in fp_set ),
 			key=op.itemgetter(0) )
-		n = bisect.bisect_left(items, (dt_max, ()))
-		for v,(k1,k2) in items[n:]:
-			try:
-				del self.set_idx_to[k1][k2]
-				if not self.set_idx_to[k1]: del self.set_idx_from[k2]
-			except KeyError: pass
-			try:
-				del self.set_idx_from[k2][k1]
-				if not self.set_idx_from[k2]: del self.set_idx_from[k1]
-			except KeyError: pass
+		keys = set(k12 for v,k12 in items[bisect.bisect_left(items, (dt_max, ())):])
+		for k1, k2 in keys:
+			self._discard_longer_from_idx(dt_max, self.set_idx_to, k1, k2)
+			self._discard_longer_from_idx(dt_max, self.set_idx_from, k2, k1)
 		self._stats_cache = None
 
-	def to_stops_from(self, stop): return self.set_idx_to[stop].items()
-	def from_stops_to(self, stop): return self.set_idx_from[stop].items()
+	def _check_if_valid(self, fp, dts_src=None, dts_dst=None):
+		if dts_src is None and dts_dst is None: return True
+		if dts_src is None: dts_src = dts_dst - fp.dt
+		if dts_dst is None: dts_dst = dts_src + fp.dt
+		return not (dts_src < fp.dts_min or dts_dst > fp.dts_max)
 
-	def time_delta(self, stop_from, stop_to, default=...):
-		if default is ...: return self.set_idx_to[stop_from][stop_to]
-		return self.set_idx_to[stop_from].get(stop_to, default)
+	def _filtered_stop_dt_tuples(self, idx_items, dts_src=None, dts_dst=None):
+		for stop, fp_list in idx_items:
+			for fp in fp_list:
+				if not self._check_if_valid(fp, dts_src, dts_dst): continue
+				yield stop, fp.dt
+				break # footpaths are sorted, so first one should be minimal
 
-	def between(self, stop_a, stop_b):
+	def to_stops_from(self, stop, dts_src=None, dts_dst=None):
+		return self._filtered_stop_dt_tuples(
+			self.set_idx_to.get(stop, dict()).items(), dts_src, dts_dst )
+
+	def from_stops_to(self, stop, dts_src=None, dts_dst=None):
+		return self._filtered_stop_dt_tuples(
+			self.set_idx_from.get(stop, dict()).items(), dts_src, dts_dst )
+
+	def time_delta(self, stop_from, stop_to, dts_src=None, dts_dst=None, default=...):
+		try: fp_list = self.set_idx_to[stop_from][stop_to]
+		except KeyError:
+			if default is ...: raise
+			return default
+		for fp in fp_list:
+			if not self._check_if_valid(fp, dts_src, dts_dst): continue
+			return fp.dt
+		else:
+			if default is not ...: return default
+			raise KeyError(stop_from, stop_to, dts_src, dts_dst)
+
+	def between(self, stop_a, stop_b, dts_src=None, dts_dst=None, default=...):
 		'Return footpath dt in any direction between two stops.'
-		try: return self.set_idx_to[stop_a][stop_b]
-		except KeyError: return self.set_idx_to[stop_b][stop_a]
+		try: return self.time_delta(stop_a, stop_b, dts_src, dts_dst)
+		except KeyError: return self.time_delta(stop_b, stop_a, dts_src, dts_dst, default=default)
 
-	_stats_cache = None
 	def _stats(self):
 		if not self._stats_cache:
-			dt_sum = dt_count = ch_count = 0
-			for k1,v1 in self.set_idx_to.items():
-				for k2,v in v1.items():
-					dt_sum, dt_count = dt_sum + v, dt_count + 1
+			dt_sum = dt_count = ch_count = fp_count = fp_keys = 0
+			for k1, fps_from_k1 in self.set_idx_to.items():
+				for k2, fp_list in fps_from_k1.items():
+					dt_sum, dt_count = dt_sum + fp_list[0].dt, dt_count + 1
+					fp_count, fp_keys = fp_count + len(fp_list), fp_keys + 1
 					if k1 == k2: ch_count += 1
-			self._stats_cache = dt_sum, dt_count, ch_count
+			self._stats_cache = self._stats_cache_t(
+				dt_sum, dt_count, ch_count, fp_count, fp_keys )
 		return self._stats_cache
 
 	def stat_mean_dt(self):
-		dt_sum, dt_count, ch_count = self._stats()
-		return (dt_sum / dt_count) if dt_count else 0
-	def stat_same_stop_count(self): return self._stats()[2]
+		s = self._stats()
+		return (s.dt_sum / s.dt_count) if s.dt_count else 0
+	def stat_mean_count_for_stops(self):
+		s = self._stats()
+		return (s.fp_count / s.fp_keys) if s.fp_keys else 0
+	def stat_same_stop_count(self): return self._stats().ch_count
 
-	def __len__(self): return self._stats()[1]
+	def __len__(self): return self._stats().dt_count # number connected a->b pairs
 
 
 @u.attr_struct(repr=False)

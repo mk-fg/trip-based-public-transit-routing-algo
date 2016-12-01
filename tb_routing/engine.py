@@ -35,7 +35,7 @@ def jtrips_to_journeys(footpaths, stop_src, stop_dst, dts_src, results):
 				if not trip: # final footpath to stop_dst
 					ts_list = jsf.ts_src.trip[jsf.ts_src.stopidx+1:] if jsf.ts_src.trip else [jsf.ts_src]
 					for ts in ts_list:
-						dt_fp = get_dt_fp(ts.stop, stop_dst)
+						dt_fp = get_dt_fp(ts.stop, stop_dst) if ts.stop != stop_dst else 0
 						if dt_fp is u.inf: continue
 						jn = jsf.journey.copy()
 						if ts.trip: jn.append_trip(jsf.ts_src, ts)
@@ -44,7 +44,7 @@ def jtrips_to_journeys(footpaths, stop_src, stop_dst, dts_src, results):
 
 				elif not jsf.ts_src.trip: # footpath from stop_src, not a trip
 					for ts in trip:
-						dt_fp = get_dt_fp(jsf.ts_src.stop, ts.stop)
+						dt_fp = get_dt_fp(jsf.ts_src.stop, ts.stop) if jsf.ts_src.stop != ts.stop else 0
 						if dt_fp is u.inf: continue
 						jn = jsf.journey.copy().append_fp(jsf.ts_src.stop, ts.stop, dt_fp)
 						queue.append(JourneySoFar(ts, jn, jsf.prio + dt_fp))
@@ -545,7 +545,7 @@ class TBTPRoutingEngine:
 
 				if not ls: # lineN -> stop_dst
 					dts = min(
-						(ts.dts_arr + timetable.footpaths.time_delta(ts.stop, stop, u.inf))
+						(ts.dts_arr + timetable.footpaths.time_delta(ts.stop, stop, default=u.inf))
 						for ts in label_src.ts.trip[label_src.ts.stopidx+1:] )
 					assert dts < u.inf # must be at least one, otherwise tp_tree is wrong
 					node_label = NodeLabel( label_src.dts_start,
