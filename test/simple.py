@@ -39,11 +39,12 @@ class SimpleTestCase(unittest.TestCase):
 				trip.add(types.TripStop(trip, stopidx, stop, dts_arr, dts_dep))
 			trips.add(trip)
 
-		for spec in tt_footpaths:
-			src_id, dst_id, dt = c.struct_from_val(spec, TestFootpath, as_tuple=True)
-			src, dst = (stops.add(types.Stop(s, s, 0, 0)) for s in [src_id, dst_id])
-			footpaths.add(src, dst, dt * 60)
-		for stop in stops: footpaths.add(stop, stop, self.dt_ch)
+		with footpaths.populate() as fp_add:
+			for spec in tt_footpaths:
+				src_id, dst_id, delta = c.struct_from_val(spec, TestFootpath, as_tuple=True)
+				src, dst = (stops.add(types.Stop(s, s, 0, 0)) for s in [src_id, dst_id])
+				fp_add(src, dst, delta * 60)
+			for stop in stops: fp_add(stop, stop, self.dt_ch)
 
 		timetable = types.Timetable(stops, footpaths, trips)
 		router = c.tb.engine.TBRoutingEngine(timetable, timer_func=c.gtfs_cli.calc_timer)

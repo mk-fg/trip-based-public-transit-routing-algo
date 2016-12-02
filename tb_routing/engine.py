@@ -19,7 +19,6 @@ def timer(self_or_func, func=None, *args, **kws):
 def jtrips_to_journeys(footpaths, stop_src, stop_dst, dts_src, results):
 	'Convert list/set of QueryResults to JourneySet with proper journey descriptions.'
 	JourneySoFar = namedtuple('JSF', 'ts_src journey prio') # unfinished journey up to ts_src
-	get_dt_fp = ft.partial(footpaths.time_delta, default=u.inf)
 
 	journeys = t.public.JourneySet()
 	for result in results:
@@ -35,29 +34,31 @@ def jtrips_to_journeys(footpaths, stop_src, stop_dst, dts_src, results):
 				if not trip: # final footpath to stop_dst
 					ts_list = jsf.ts_src.trip[jsf.ts_src.stopidx+1:] if jsf.ts_src.trip else [jsf.ts_src]
 					for ts in ts_list:
-						dt_fp = get_dt_fp(ts.stop, stop_dst) if ts.stop != stop_dst else 0
-						if dt_fp is u.inf: continue
+						fp_delta = 0 if ts.stop == stop_dst else\
+							footpaths.time_delta(ts.stop, stop_dst, dts_src=ts.dts_arr)
+						if fp_delta is None: continue
 						jn = jsf.journey.copy()
 						if ts.trip: jn.append_trip(jsf.ts_src, ts)
-						jn.append_fp(ts.stop, stop_dst, dt_fp)
-						queue.append(JourneySoFar(None, jn, jsf.prio + dt_fp))
+						jn.append_fp(ts.stop, stop_dst, fp_delta)
+						queue.append(JourneySoFar(None, jn, jsf.prio + fp_delta))
 
 				elif not jsf.ts_src.trip: # footpath from stop_src, not a trip
 					for ts in trip:
-						dt_fp = get_dt_fp(jsf.ts_src.stop, ts.stop) if jsf.ts_src.stop != ts.stop else 0
-						if dt_fp is u.inf: continue
-						jn = jsf.journey.copy().append_fp(jsf.ts_src.stop, ts.stop, dt_fp)
-						queue.append(JourneySoFar(ts, jn, jsf.prio + dt_fp))
+						fp_delta = 0 if jsf.ts_src.stop == ts.stop else\
+							footpaths.time_delta(jsf.ts_src.stop, ts.stop, dts_dst=ts.dts_dep)
+						if fp_delta is None: continue
+						jn = jsf.journey.copy().append_fp(jsf.ts_src.stop, ts.stop, fp_delta)
+						queue.append(JourneySoFar(ts, jn, jsf.prio + fp_delta))
 
 				else: # footpath from previous trip - common case
 					for ts1, ts2 in it.product(jsf.ts_src.trip[jsf.ts_src.stopidx+1:], trip):
-						dt_fp = get_dt_fp(ts1.stop, ts2.stop)
-						if dt_fp is u.inf: continue
-						if ts1.dts_arr + dt_fp > ts2.dts_dep: continue
+						fp_delta = footpaths.time_delta(
+							ts1.stop, ts2.stop, dts_src=ts1.dts_arr, dts_dst=ts2.dts_dep )
+						if fp_delta is None: continue
 						jn = jsf.journey.copy()
 						jn.append_trip(jsf.ts_src, ts1)
-						jn.append_fp(ts1.stop, ts2.stop, dt_fp)
-						queue.append(JourneySoFar(ts2, jn, jsf.prio + dt_fp))
+						jn.append_fp(ts1.stop, ts2.stop, fp_delta)
+						queue.append(JourneySoFar(ts2, jn, jsf.prio + fp_delta))
 
 		best_jsf = min(queue, key=op.attrgetter('prio'))
 		journeys.add(best_jsf.journey)
@@ -166,13 +167,15 @@ class TBRoutingEngine:
 
 				reachable_stops = list()
 				update_min_time(min_time_arr, ts_p.stop, ts_p.dts_arr)
-				for stop_q, dt_fp in timetable.footpaths.to_stops_from(ts_p.stop):
-					dts_q = ts_p.dts_arr + dt_fp
+				for stop_q, fp in timetable.footpaths.to_stops_from(ts_p.stop):
+					fp_delta = fp.get_shortest(dts_src=ts_p.dts_arr)
+					if fp_delta is None: continue
+					dts_q = ts_p.dts_arr + fp_delta
 					update_min_time(min_time_arr, stop_q, dts_q)
 					update_min_time(min_time_ch, stop_q, dts_q)
-					reachable_stops.append((stop_q, dt_fp, dts_q))
+					reachable_stops.append((stop_q, fp_delta, dts_q))
 
-				for stop_q, dt_fp, dts_q in reachable_stops:
+				for stop_q, transfer_fp_delta, dts_q in reachable_stops:
 					for j, line in lines.lines_with_stop(stop_q):
 						if j == len(line[0]) - 1: continue # transfers to last stop make no sense
 						trip_u = line.earliest_trip(j, dts_q)
@@ -188,9 +191,9 @@ class TBRoutingEngine:
 						try: ts_t, ts_u = trip_t[i-1], trip_u[j+1]
 						except IndexError: continue # transfers from-start/to-end of t/u trips
 						if ts_t.stop == ts_u.stop:
-							try: dt = timetable.footpaths.time_delta(ts_t.stop, ts_u.stop)
-							except KeyError: continue
-							if ts_t.dts_arr + dt <= ts_u.dts_dep:
+							delta = timetable.footpaths.time_delta(
+								ts_t.stop, ts_u.stop, dts_src=ts_t.dts_arr, dts_dst=ts_u.dts_dep )
+							if delta is not None and ts_t.dts_arr + delta <= ts_u.dts_dep:
 								counts['uturns'] += 1
 								continue
 
@@ -199,15 +202,17 @@ class TBRoutingEngine:
 						for k in range(j+1, len(trip_u)):
 							ts = trip_u[k]
 							keep = keep | update_min_time(min_time_arr, ts.stop, ts.dts_arr)
-							for stop, dt in timetable.footpaths.to_stops_from(ts_u.stop):
-								dts = ts_u.dts_arr + dt_fp
+							for stop, fp in timetable.footpaths.to_stops_from(ts_u.stop):
+								fp_delta = fp.get_shortest(dts_src=ts_u.dts_arr)
+								if fp_delta is None: continue
+								dts = ts_u.dts_arr + fp_delta
 								keep = keep | update_min_time(min_time_arr, stop, dts)
 								keep = keep | update_min_time(min_time_ch, stop, dts)
 						if not keep:
 							counts['worse'] += 1
 							continue
 
-						transfers.add(t.base.Transfer(ts_p, ts_q, dt_fp))
+						transfers.add(t.base.Transfer(ts_p, ts_q, transfer_fp_delta))
 
 		self.log.debug( 'Discarded u-turns={:,}'
 			' no-improvement={:,}', counts['uturns'], counts['worse'] )
@@ -236,18 +241,23 @@ class TBRoutingEngine:
 					.trips_by_relation(trip, _ss.non_dominated, _ss.equal):
 				R[trip_u] = min(i, R.get(trip_u, i_max))
 
-		lines_to_dst = dict() # {trip: (i, line, dt)}
-		for stop_q, dt_fp in timetable.footpaths.from_stops_to(stop_dst):
-			if stop_q == stop_dst: dt_fp = 0
+		# Trips-to-destintaion index is used here instead of lines-to-destintaion,
+		#  because footpath time deltas are tied to each trip stop times, and can't be
+		#  generalized to lines with multiple of arrival-times for stop, as it is in the algo.
+		trips_to_dst = dict() # {trip: (i, fp_delta)}
+		for stop_q, fp in timetable.footpaths.from_stops_to(stop_dst):
+			if stop_q == stop_dst: fp = None
 			for i, line in lines.lines_with_stop(stop_q):
-				for trip in line: lines_to_dst.setdefault(trip, list()).append((i, line, dt_fp))
-		for line_infos in lines_to_dst.values(): # so that all "i > b" come up first
-			line_infos.sort(reverse=True, key=op.itemgetter(0))
+				for trip in line:
+					fp_delta = fp.valid_at(dts_src=trip[i].dts_arr) if fp else 0
+					if fp_delta is None: continue
+					trips_to_dst[trip] = i, fp_delta
 
 		# Queue initial set of trips (reachable from stop_src) to examine
-		for stop_q, dt_fp in timetable.footpaths.to_stops_from(stop_src):
-			if stop_q == stop_src: dt_fp = 0
-			dts_q, jtrips = dts_src + dt_fp, list()
+		for stop_q, fp in timetable.footpaths.to_stops_from(stop_src):
+			fp_delta = fp.get_shortest(dts_src=dts_src) if stop_q != stop_src else 0
+			if fp_delta is None: continue
+			dts_q, jtrips = dts_src + fp_delta, list()
 			if stop_q == stop_dst:
 				results.add(t.base.QueryResult(dts_q, 0, jtrips))
 				continue # can't be beaten on time or transfers - can only be extended
@@ -262,12 +272,13 @@ class TBRoutingEngine:
 				jtrips = jtrips + [trip]
 
 				# Check if trip reaches stop_dst (or its footpath-vicinity) directly
-				for i_dst, line, dt_fp in lines_to_dst.get(trip, list()):
-					if i_dst <= b: break # can't reach previous stop
-					line_dts_dst = trip[i_dst].dts_arr + dt_fp
-					if line_dts_dst < t_min:
-						t_min = line_dts_dst
-						results.add(t.base.QueryResult(line_dts_dst, n, jtrips))
+				if trip in trips_to_dst:
+					i_dst, fp_delta = trips_to_dst[trip]
+					if b < i_dst: # can't reach previous stops, and b->b trips make no sense
+						dts_dst = trip[i_dst].dts_arr + fp_delta
+						if dts_dst < t_min:
+							t_min = dts_dst
+							results.add(t.base.QueryResult(dts_dst, n, jtrips))
 
 				for i in range(b+1, e+1): # b < i <= e
 					if trip[i].dts_arr >= t_min: break # after +1 transfer, it's guaranteed to be dominated
@@ -305,21 +316,24 @@ class TBRoutingEngine:
 				i_min = min(i, R.get((n, trip_u), i_max))
 				for m in range(n, max_transfers): R[m, trip_u] = i_min
 
-		lines_to_dst = dict() # {trip: (i, line, dt)}
-		for stop_q, dt_fp in timetable.footpaths.from_stops_to(stop_dst):
-			if stop_q == stop_dst: dt_fp = 0
+		# Trips-to-destintaion index is used here instead of lines-to-destintaion,
+		#  because footpath time deltas are tied to each trip stop times, and can't be
+		#  generalized to lines with multiple of arrival-times for stop, as it is in the algo.
+		trips_to_dst = dict() # {trip: (i, fp_delta)}
+		for stop_q, fp in timetable.footpaths.from_stops_to(stop_dst):
+			if stop_q == stop_dst: fp = None
 			for i, line in lines.lines_with_stop(stop_q):
-				for trip in line: lines_to_dst.setdefault(trip, list()).append((i, line, dt_fp))
-		for line_infos in lines_to_dst.values(): # so that all "i > b" come up first
-			line_infos.sort(reverse=True, key=op.itemgetter(0))
+				for trip in line:
+					fp_delta = fp.valid_at(dts_src=trip[i].dts_arr) if fp else 0
+					if fp_delta is None: continue
+					trips_to_dst[trip] = i, fp_delta
 
 		# Same as with earliest-arrival, queue set of trips reachable from stop_src,
 		#  but instead of queuing all checks (one for each trip) with same departure time,
 		#  queue one DepartureCriteriaCheck for every departure time of each trip from
 		#  these reachable stops.
 		profile_queue = list()
-		for stop_q, dt_fp in timetable.footpaths.to_stops_from(stop_src):
-			if stop_q == stop_src: dt_fp = 0
+		for stop_q, fp in timetable.footpaths.to_stops_from(stop_src):
 			if stop_q == stop_dst:
 				# Direct src-to-dst footpath can't be easily compared to
 				#  other results, as it has no fixed departure/arrival times,
@@ -327,7 +341,10 @@ class TBRoutingEngine:
 				results.add_exception(t.base.QueryResult(None, 0, list()))
 			for i, line in lines.lines_with_stop(stop_q):
 				for trip in line:
-					dts_min, dts_max = trip[i].dts_arr - dt_fp, trip[i].dts_dep - dt_fp
+					fp_delta = 0 if stop_q == stop_src else\
+						fp.get_shortest(dts_src=dts_edt, dts_dst=trip[i].dts_dep)
+					if fp_delta is None: continue
+					dts_min, dts_max = trip[i].dts_arr - fp_delta, trip[i].dts_dep - fp_delta
 					if not (dts_edt <= u.dts_wrap(dts_max) or dts_ldt <= u.dts_wrap(dts_min)): continue
 					profile_queue.append(DepartureCriteriaCheck(trip, i, min(dts_ldt, dts_max), list()))
 		# Latest departures are processed first because labels (R) are reused for the whole query,
@@ -350,12 +367,13 @@ class TBRoutingEngine:
 					jtrips = jtrips + [trip]
 
 					# Check if trip reaches stop_dst (or its footpath-vicinity) directly
-					for i_dst, line, dt_fp in lines_to_dst.get(trip, list()):
-						if i_dst <= b: break # can't reach previous stop
-						line_dts_dst = trip[i_dst].dts_arr + dt_fp
-						if line_dts_dst < t_min:
-							t_min_idx[n] = line_dts_dst
-							results.add(t.base.QueryResult(line_dts_dst, n, jtrips, dts_src))
+					if trip in trips_to_dst:
+						i_dst, fp_delta = trips_to_dst[trip]
+						if b < i_dst: # can't reach previous stops, and b->b trips make no sense
+							dts_dst = trip[i_dst].dts_arr + fp_delta
+							if dts_dst < t_min:
+								t_min_idx[n] = dts_dst
+								results.add(t.base.QueryResult(dts_dst, n, jtrips, dts_src))
 
 					# Check if trip can lead to nondominated journeys, and queue trips reachable from it
 					for i in range(b+1, e+1): # b < i <= e
@@ -374,6 +392,7 @@ class TBRoutingEngine:
 	def build_tp_tree(self, max_transfers=15):
 		'''Run all-to-all profile queries to build Transfer-Patterns
 			prefix-tree of stop_src-to-stop_dst Line connections.'''
+		raise NotImplementedError('Needs to be adapted for time-dependent footpaths')
 
 		# To avoid duplicating paper-1 algos' weird naming/types here:
 		#  R -> trip_labels: Mapping[(n, Trip), int]

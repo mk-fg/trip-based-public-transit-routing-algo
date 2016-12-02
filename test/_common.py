@@ -242,17 +242,20 @@ class GraphAssertions:
 						math.cos(lat1) * math.cos(lat2) * math.sin((lon2 - lon1)/2)**2 ))
 
 				if km <= max_km:
-					try: dt = graph.timetable.footpaths.between(ts1.stop, ts2.stop)
-					except KeyError: dt = -1
+					fp_delta = graph.timetable.footpaths.time_delta(ts1.stop, ts2.stop)
+					if fp_delta is None: fp_delta = -1
 					print(
-						'X-{}: {:.4f} {:.4f}\n  walk: {:,.1f}m, dt={:,.0f}s\n  Y-{}: {:.4f} {:.4f}'.format(
-						n1, ts1.stop.lon, ts1.stop.lat, km * 1000, dt, n2, ts2.stop.lon, ts2.stop.lat ))
+						'X-{}: lon={:.4f} lat={:.4f}\n  walk:'
+							' {:,.1f}m, dt={:,.0f}s\n  Y-{}: {:.4f} {:.4f}'.format(
+						n1, ts1.stop.lon, ts1.stop.lat,
+							km * 1000, fp_delta, n2, ts2.stop.lon, ts2.stop.lat ))
 					for trip1, trip2 in it.product(line1, line2):
 						ts1, ts2 = trip1[n1], trip2[n2]
 						td = ts2.dts_dep - ts1.dts_arr
 						if 0 <= td <= max_td:
-							print('  X-arr: {} -> Y-dep: {} (delta: {:,.1f}s)'.format(
-								tb.u.dts_format(ts1.dts_arr), tb.u.dts_format(ts2.dts_dep), td ))
+							print('  X-arr[{}]: {} -> Y-dep[{}]: {} (delta: {:,.1f}s)'.format(
+								trip1.id, tb.u.dts_format(ts1.dts_arr),
+								trip2.id, tb.u.dts_format(ts2.dts_dep), td ))
 					print()
 
 
@@ -302,8 +305,7 @@ class GraphAssertions:
 					if not line_found: raise_error('No Lines/Trips found for trip-segment')
 
 				elif seg.type == 'fp':
-					try: graph.timetable.footpaths.between(a, b)
-					except KeyError:
+					if not graph.timetable.footpaths.connected(a, b):
 						raise_error('No footpath-transfer found between src/dst: {} -> {}', a, b)
 					for ts in ts_transfer_chk:
 						if ts.stop is not a: continue

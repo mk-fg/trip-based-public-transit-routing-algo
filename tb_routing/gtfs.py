@@ -31,10 +31,10 @@ class GTFSConf:
 	group_stops_into_stations = False # use "parent_station" to group all stops into one under its id
 
 	# Options for footpath-generation - not used if transfers.txt is non-empty
-	dt_ch = 2*60 # fixed time-delta overhead for changing trips (i.e. p->p footpaths)
-	footpath_dt_base = 2*60 # footpath_dt = dt_base + km / speed_kmh
+	delta_ch = 2*60 # fixed time-delta overhead for changing trips (i.e. p->p footpaths)
+	footpath_delta_base = 2*60 # footpath_delta = delta_base + km / speed_kmh
 	footpath_speed_kmh = 5 / 3600
-	footpath_dt_max = 7*60 # all footpaths longer than that are discarded as invalid
+	footpath_delta_max = 7*60 # all footpaths longer than that are discarded as invalid
 	footpath_gen_thresholds = 0, 0.5
 
 
@@ -187,7 +187,7 @@ def calculate_dts(dt_min, dt, offset_arr, offset_dep):
 	dts_arr, dts_dep = ((dt - dt_min).total_seconds() for dt in [dt_arr, dt_dep])
 	return dts_arr, dts_dep
 
-def footpath_dt(stop_a, stop_b, dt_base, speed_kmh, math=math):
+def footpath_dt(stop_a, stop_b, delta_base, speed_kmh, math=math):
 	'''Calculate footpath time-delta (dt) between two stops,
 		based on their lon/lat distance (using Haversine Formula) and walking-speed constant.'''
 	# Alternative: use UTM coordinates and KDTree (e.g. scipy) or spatial dbs
@@ -197,7 +197,7 @@ def footpath_dt(stop_a, stop_b, dt_base, speed_kmh, math=math):
 	km = 6367 * 2 * math.asin(math.sqrt(
 		math.sin((lat2 - lat1)/2)**2 +
 		math.cos(lat1) * math.cos(lat2) * math.sin((lon2 - lon1)/2)**2 ))
-	return dt_base + km / speed_kmh
+	return delta_base + km / speed_kmh
 
 
 def parse_timetable(gtfs_dir, conf):
@@ -263,43 +263,42 @@ def parse_timetable(gtfs_dir, conf):
 
 	### Footpaths
 	footpaths, fp_samestop_count, fp_synth = t.public.Footpaths(), 0, False
-	get_stop_set = lambda stop_id: list(filter(stops.get, stop_sets.get(stop_id, list())))
-	for src_type in 'transfers', 'links':
-		for s in iter_gtfs_tuples(gtfs_dir, src_type, empty_if_missing=True):
-			# XXX: make footpaths properly dts-dependent
-			# Current hack is to simply ok any footpath that falls into date range
-			if timespan_info.dt_start and src_type == 'links' and not (
-				s.start_date >= timespan_info.date_max_str
-				and s.end_date <= timespan_info.date_min_str ): continue
-			stops_from, stops_to = map(get_stop_set, [s.from_stop_id, s.to_stop_id])
-			if not (stops_from and stops_to): continue
-			dt = u.get_any(s._asdict(), 'min_transfer_time', 'link_secs')
-			if dt is None:
-				log.debug('Missing transfer time value in CSV tuple: {}', t)
-				continue
-			for stop_from, stop_to in it.product(stops_from, stops_to):
-				if stop_from == stop_to: fp_samestop_count += 1
-				footpaths.add(stop_from, stop_to, int(dt))
+	with footpaths.populate() as fp_add:
 
-	if len(stops):
-		fp_min, fp_min_samestop = conf.footpath_gen_thresholds
-		if len(footpaths) / len(stops) <= fp_min:
-			log.debug('No transfers/links data found, generating synthetic footpaths from lon/lat')
-			fp_synth, fp_dt = True, ft.partial( footpath_dt,
-				dt_base=conf.footpath_dt_base, speed_kmh=conf.footpath_speed_kmh )
-			for stop_a, stop_b in it.permutations(list(stops), 2):
-				footpaths.add(stop_a, stop_b, fp_dt(stop_a, stop_b))
-			footpaths.discard_longer(conf.footpath_dt_max)
-		if fp_samestop_count / len(stops) <= fp_min_samestop:
-			if not fp_synth:
-				log.debug(
-					'Generating missing same-stop footpaths (dt_ch={}),'
-						' because source data seem to have very few of them - {} for {} stops',
-					conf.dt_ch, fp_samestop_count, len(stops) )
-			for stop in stops:
-				try: footpaths.between(stop, stop)
-				except KeyError:
-					footpaths.add(stop, stop, conf.dt_ch)
+		get_stop_set = lambda stop_id: list(filter(stops.get, stop_sets.get(stop_id, list())))
+		for src_type in 'transfers', 'links':
+			for s in iter_gtfs_tuples(gtfs_dir, src_type, empty_if_missing=True):
+				if timespan_info.dt_start and src_type == 'links' and not (
+					s.start_date >= timespan_info.date_max_str
+					and s.end_date <= timespan_info.date_min_str ): continue
+				stops_from, stops_to = map(get_stop_set, [s.from_stop_id, s.to_stop_id])
+				if not (stops_from and stops_to): continue
+				dt = u.get_any(s._asdict(), 'min_transfer_time', 'link_secs')
+				if dt is None:
+					log.debug('Missing transfer time value in CSV tuple: {}', t)
+					continue
+				for stop_from, stop_to in it.product(stops_from, stops_to):
+					if stop_from == stop_to: fp_samestop_count += 1
+					fp_add(stop_from, stop_to, int(dt)) # XXX: dts_min, dts_max
+
+		if len(stops):
+			fp_min, fp_min_samestop = conf.footpath_gen_thresholds
+			if len(footpaths) / len(stops) <= fp_min:
+				log.debug('No transfers/links data found, generating synthetic footpaths from lon/lat')
+				fp_synth, fp_delta_func = True, ft.partial( footpath_dt,
+					delta_base=conf.footpath_delta_base, speed_kmh=conf.footpath_speed_kmh )
+				for stop_a, stop_b in it.permutations(list(stops), 2):
+					delta = fp_delta_func(stop_a, stop_b)
+					if delta <= conf.footpath_delta_max: fp_add(stop_a, stop_b, delta)
+			if fp_samestop_count / len(stops) <= fp_min_samestop:
+				if not fp_synth:
+					log.debug(
+						'Generating missing same-stop footpaths (delta_ch={}),'
+							' because source data seem to have very few of them - {} for {} stops',
+						conf.delta_ch, fp_samestop_count, len(stops) )
+				for stop in stops:
+					if footpaths.connected(stop, stop): continue
+					fp_add(stop, stop, conf.delta_ch)
 					fp_samestop_count += 1
 
 	return t.public.Timetable(stops, footpaths, trips, timespan_info)
