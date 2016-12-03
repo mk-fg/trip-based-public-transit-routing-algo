@@ -32,8 +32,8 @@ def init_gtfs_router( path, cache_path=None, cache_tt_path=None,
 		else: timetable = tb.u.pickle_load(path, fail=True)
 		log.debug(
 			'Parsed timetable: stops={:,}, footpaths={:,}'
-				' (mean-delta={:,.1f}s, mean-options={:,}, same-stop={:,}),'
-				' trips={:,} (mean_stops={:,.1f})',
+				' (mean-delta={:,.1f}s, mean-options={:,.1f}, same-stop={:,}),'
+				' trips={:,} (mean-stops={:,.1f})',
 			len(timetable.stops), len(timetable.footpaths),
 			timetable.footpaths.stat_mean_delta(),
 			timetable.footpaths.stat_mean_delta_count(),

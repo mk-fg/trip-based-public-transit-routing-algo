@@ -52,11 +52,11 @@ def dt_adjust(dt, d=0, h=0, m=0, s=0, subtract=False):
 		d, h, m, s= d.days, d.hours, d.minutes, d.seconds
 		assert not any([d.microseconds, d.milliseconds, d.weeks])
 	if h == m == s == 0: # adding days should only adjust date, not time
-		if subtract:
-			d = -d
-			assert d <= 0
 		if d == 0: return dt
-		dt = (dt + datetime.timedelta(d)) if d > 0 else (dt - datetime.timedelta(d))
+		if d < 0:
+			assert not subtract, [d, subtract]
+			d, subtract = -d, True
+		dt = (dt + datetime.timedelta(d)) if not subtract else (dt - datetime.timedelta(d))
 		return dt.tzinfo.localize(dt.replace(tzinfo=None))
 	else:
 		assert not d, 'Adjusting both date by days= and time - probably a bug'
@@ -138,7 +138,7 @@ def get_timespan_info( svc_calendar, svc_exceptions,
 
 	svc_days = dict() # {service_id: {date_str: datetime}}
 	for svc_id, sce in svc_calendar.items():
-		if not (sce.date_start >= date_max_str and sce.date_end <= date_min_str): continue
+		if sce.date_start > date_max_str or sce.date_end < date_min_str: continue
 		days = svc_days.setdefault(svc_id, dict())
 
 		# Apply any service-specific exceptions
@@ -167,7 +167,7 @@ def get_timespan_info( svc_calendar, svc_exceptions,
 			svc_days.setdefault(svc_id, dict())[date_str] = dt
 
 	if not svc_days:
-		log.debug('No services were found to be operational on specified days')
+		log.info('No services were found to be operational on specified days')
 
 	return t.public.TimespanInfo(
 		dt_start, dt_min, svc_days, date_map, date_min_str, date_max_str )
@@ -291,8 +291,8 @@ def parse_timetable(gtfs_dir, conf):
 		#  transfers that are only valid for specific date/time intervals
 		for s in iter_gtfs_tuples(gtfs_dir, 'links', empty_if_missing=True):
 			if timespan_info.dt_start:
-				if not ( s.start_date <= timespan_info.date_max_str
-					and s.end_date >= timespan_info.date_min_str ): continue
+				if ( s.start_date > timespan_info.date_max_str
+					or s.end_date < timespan_info.date_min_str ): continue
 				days = timespan_info.date_map.values()
 			else: days = {None: None}
 			stops_from, stops_to = map(get_stop_set, [s.from_stop_id, s.to_stop_id])
