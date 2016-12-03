@@ -18,7 +18,7 @@ def calc_timer(func, *args, log=tb.u.get_logger('timer'), **kws):
 	log.debug('[{}] Finished in: {:.1f}s', func_id, td)
 	return data
 
-def init_gtfs_router( path, cache_path=None,
+def init_gtfs_router( path, cache_path=None, cache_tt_path=None,
 		conf=None, conf_engine=None, path_timetable=False, timer_func=None ):
 	if not conf: conf = tb.gtfs.GTFSConf()
 	timetable_func = tb.gtfs.parse_timetable\
@@ -39,6 +39,7 @@ def init_gtfs_router( path, cache_path=None,
 			timetable.footpaths.stat_mean_delta_count(),
 			timetable.footpaths.stat_same_stop_count(),
 			len(timetable.trips), timetable.trips.stat_mean_stops() )
+		if cache_tt_path: tb.u.pickle_dump(timetable, cache_tt_path)
 		router = router_factory(timetable)
 		if cache_path: tb.u.pickle_dump(router.graph, cache_path)
 	else:
@@ -58,9 +59,13 @@ def main(args=None):
 	parser.add_argument('gtfs_dir', help='Path to gtfs data directory to build graph from.')
 
 	group = parser.add_argument_group('Basic timetable/parser options')
+	group.add_argument('-t', '--timetable', action='store_true',
+		help='Treat "gtfs_dir" argument as a pickled TImetable object.')
 	group.add_argument('-c', '--cache', metavar='path',
 		help='Pickle cache-file to load (if exists)'
 			' or save (if missing) resulting graph data from/to.')
+	group.add_argument('--cache-timetable', metavar='path',
+		help='Pickle parsed timetable data to a specified file.')
 	group.add_argument('-s', '--stops-to-stations', action='store_true',
 		help='Convert/translate GTFS "stop" ids to "parent_station" ids,'
 				' i.e. group all stops on the station into a single one.'
@@ -89,8 +94,6 @@ def main(args=None):
 			' Default: %(default)s')
 
 	group = parser.add_argument_group('Misc/debug options')
-	group.add_argument('-t', '--timetable', action='store_true',
-		help='Treat "gtfs_dir" argument as a pickled TImetable object.')
 	group.add_argument('--dot-for-lines', metavar='path',
 		help='Dump Stop/Line graph (in graphviz dot format) to a specified file and exit.')
 	group.add_argument('--dot-opts', metavar='yaml-data',
@@ -183,7 +186,8 @@ def main(args=None):
 	conf.parse_start_date, conf.parse_days, conf.parse_days_pre =\
 		day, opts.parse_days_after, opts.parse_days_before
 	timetable, router = init_gtfs_router( opts.gtfs_dir,
-		opts.cache, conf=conf, conf_engine=conf_engine,
+		opts.cache, opts.cache_timetable,
+		conf=conf, conf_engine=conf_engine,
 		path_timetable=opts.timetable, timer_func=calc_timer )
 
 	dot_opts = dict()
