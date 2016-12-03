@@ -175,7 +175,7 @@ def main(args=None):
 		level=tb.u.logging.DEBUG if opts.debug else tb.u.logging.WARNING )
 
 	day = opts.day
-	if not (day.isdigit() and len(day) == 8):
+	if day and not (day.isdigit() and len(day) == 8):
 		import subprocess
 		proc = subprocess.Popen(['date', '-d', day, '+%Y%m%d'], stdout=subprocess.PIPE)
 		day = proc.stdout.read().decode().strip()
