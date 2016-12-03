@@ -38,6 +38,9 @@ class GTFSConf:
 	footpath_gen_thresholds = 0, 0.5
 
 
+weekday_columns = [ 'monday', 'tuesday',
+	'wednesday', 'thursday', 'friday', 'saturday', 'sunday' ]
+
 class CalendarException(enum.Enum): added, removed = '1', '2'
 
 def dt_adjust(dt, d=0, h=0, m=0, s=0, subtract=False):
@@ -97,16 +100,19 @@ class GTFSTimeOffset:
 ServiceCalendarEntry = namedtuple('SCE', 'date_start date_end weekdays')
 
 
-def iter_gtfs_tuples(gtfs_dir, filename, empty_if_missing=False):
+def iter_gtfs_tuples(gtfs_dir, filename, empty_if_missing=False, yield_fields=False):
 	log.debug('Processing gtfs file: {}', filename)
 	if filename.endswith('.txt'): filename = filename[:-4]
 	tuple_t = ''.join(' '.join(filename.rstrip('s').split('_')).title().split())
 	p = gtfs_dir / '{}.txt'.format(filename)
-	if empty_if_missing and not os.access(str(p), os.R_OK): return
+	if empty_if_missing and not os.access(str(p), os.R_OK):
+		if yield_fields: yield list()
+		return
 	with p.open(encoding='utf-8-sig') as src:
 		src_csv = csv.reader(src)
 		fields = list(v.strip() for v in next(src_csv))
 		tuple_t = namedtuple(tuple_t, fields)
+		if yield_fields: yield fields
 		for line in src_csv:
 			try: yield tuple_t(*line)
 			except TypeError:
@@ -128,7 +134,7 @@ def get_timespan_info( svc_calendar, svc_exceptions,
 	date_map = list( dt_adjust(dt_min, d=n)
 		for n in range(parse_days + parse_days_pre + 1) )
 	date_min_str, date_max_str = (d.strftime(gtfs_date_fmt) for d in [dt_min, date_map[-1]])
-	date_map = OrderedDict((d.strftime(gtfs_date_fmt), d.date()) for d in date_map)
+	date_map = OrderedDict((d.strftime(gtfs_date_fmt), d) for d in date_map)
 
 	svc_days = dict() # {service_id: {date_str: datetime}}
 	for svc_id, sce in svc_calendar.items():
@@ -140,17 +146,17 @@ def get_timespan_info( svc_calendar, svc_exceptions,
 		for exc, date_str in svc_exceptions[svc_id]:
 			if not (date_min_str <= date_str <= date_max_str): continue
 			if exc == CalendarException.added:
-				parse_days[date_str] = True, date.strptime(date_str, gtfs_date_fmt)
+				parse_days[date_str] = True, tz.localize(date.strptime(date_str, gtfs_date_fmt))
 			elif exc == CalendarException.removed: parse_days.pop(date_str, None)
 			else: raise ValueError(t)
 
 		# Add datetime to svc_days for each date that service is operating on
-		for date_str, (exc, date) in sorted(parse_days.items()):
+		for date_str, (exc, dt) in sorted(parse_days.items()):
 			if not exc:
 				if date_str < s.date_start: continue
 				elif date_str > s.date_end: break
 				if not sce.weekdays[date.weekday()]: continue
-			days[date_str] = tz.localize(dt_cls(date.year, date.month, date.day))
+			days[date_str] = dt
 
 	# Add days for exception-only services, not mentioned in svc_calendar at all
 	for svc_id, excs in svc_exceptions.items():
@@ -166,7 +172,11 @@ def get_timespan_info( svc_calendar, svc_exceptions,
 	return t.public.TimespanInfo(
 		dt_start, dt_min, svc_days, date_map, date_min_str, date_max_str )
 
-def calculate_dts(dt_min, dt, offset_arr, offset_dep):
+def offset_to_dts(dt_min, dt, offset):
+	if dt is None: return offset.flat
+	return (offset.apply_to_datetime(dt) - dt_min).total_seconds()
+
+def calculate_trip_dts(dt_min, dt, offset_arr, offset_dep):
 	'''Calculate relative timestamps ("dts" floats of seconds) for
 			arrival/departure GTFSTimeOffsets on a specific day (`dt` datetime).
 		"relative" to `dt_min` datetime - start of the parsed interval.
@@ -183,9 +193,7 @@ def calculate_dts(dt_min, dt, offset_arr, offset_dep):
 		else: offset_arr = trip[-1].offset_dep # "scheduled based on the nearest preceding timed stop"
 	if not offset_dep: offset_dep = offset_arr
 	assert offset_arr and offset_dep
-	dt_arr, dt_dep = (o.apply_to_datetime(dt) for o in [offset_arr, offset_dep])
-	dts_arr, dts_dep = ((dt - dt_min).total_seconds() for dt in [dt_arr, dt_dep])
-	return dts_arr, dts_dep
+	return offset_to_dts(dts_arr), offset_to_dts(dts_dep)
 
 def footpath_dt(stop_a, stop_b, delta_base, speed_kmh, math=math):
 	'''Calculate footpath time-delta (dt) between two stops,
@@ -206,11 +214,9 @@ def parse_timetable(gtfs_dir, conf):
 
 	### Calculate processing timespan / calendar and map of services operating there
 	if conf.parse_start_date:
-		weekday_cols = 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'
-
 		svc_calendar = dict()
 		for s in iter_gtfs_tuples(gtfs_dir, 'calendar', empty_if_missing=True):
-			weekdays = list(bool(int(getattr(s, k))) for k in weekday_cols)
+			weekdays = list(bool(int(getattr(s, k))) for k in weekday_columns)
 			svc_calendar[s.service_id] = ServiceCalendarEntry(s.start_date, s.end_date, weekdays)
 
 		svc_exceptions = defaultdict(ft.partial(defaultdict, set))
@@ -256,7 +262,7 @@ def parse_timetable(gtfs_dir, conf):
 				if offset_arr_prev is not None:
 					if offset_arr < offset_arr_prev: offset_arr.d += 1 # assuming bogus 24:00 -> 00:00
 				offset_arr_prev = offset_arr
-				dts_arr, dts_dep = calculate_dts(timespan_info.dt_min, dt, offset_arr, offset_dep)
+				dts_arr, dts_dep = calculate_trip_dts(timespan_info.dt_min, dt, offset_arr, offset_dep)
 				stop = stops.add(stop_dict[ts.stop_id])
 				trip.add(t.public.TripStop(trip, stopidx, stop, dts_arr, dts_dep))
 			if trip: trips.add(trip)
@@ -264,22 +270,42 @@ def parse_timetable(gtfs_dir, conf):
 	### Footpaths
 	footpaths, fp_samestop_count, fp_synth = t.public.Footpaths(), 0, False
 	with footpaths.populate() as fp_add:
-
 		get_stop_set = lambda stop_id: list(filter(stops.get, stop_sets.get(stop_id, list())))
-		for src_type in 'transfers', 'links':
-			for s in iter_gtfs_tuples(gtfs_dir, src_type, empty_if_missing=True):
-				if timespan_info.dt_start and src_type == 'links' and not (
-					s.start_date >= timespan_info.date_max_str
-					and s.end_date <= timespan_info.date_min_str ): continue
+
+		transfers = iter_gtfs_tuples(gtfs_dir, 'transfers', empty_if_missing=True, yield_fields=True)
+		transfers_fields = next(transfers)
+		if 'min_transfer_time' not in transfers_fields:
+			if transfers_fields:
+				# Can maybe be used as a hint about which transfers to generate/skip
+				log.info('Skipping transfers.txt file as it has no "min_transfer_time" field')
+		else:
+			for s in transfers:
 				stops_from, stops_to = map(get_stop_set, [s.from_stop_id, s.to_stop_id])
 				if not (stops_from and stops_to): continue
-				dt = u.get_any(s._asdict(), 'min_transfer_time', 'link_secs')
-				if dt is None:
-					log.debug('Missing transfer time value in CSV tuple: {}', t)
-					continue
+				delta = int(s.min_transfer_time)
 				for stop_from, stop_to in it.product(stops_from, stops_to):
 					if stop_from == stop_to: fp_samestop_count += 1
-					fp_add(stop_from, stop_to, int(dt)) # XXX: dts_min, dts_max
+					fp_add(stop_from, stop_to, delta)
+
+		# links.txt is specific to gbrail.info and has
+		#  transfers that are only valid for specific date/time intervals
+		for s in iter_gtfs_tuples(gtfs_dir, 'links', empty_if_missing=True):
+			if timespan_info.dt_start:
+				if not ( s.start_date <= timespan_info.date_max_str
+					and s.end_date >= timespan_info.date_min_str ): continue
+				days = timespan_info.date_map.values()
+			else: days = {None: None}
+			stops_from, stops_to = map(get_stop_set, [s.from_stop_id, s.to_stop_id])
+			if not (stops_from and stops_to): continue
+			delta = int(s.link_secs)
+			for dt in days:
+				if not bool(int(getattr(s, weekday_columns[day.weekday()]))): continue
+				dts_min, dts_max = (
+					offset_to_dts(timespan_info.dt_min, dt, GTFSTimeOffset.parse(v))
+					for v in [s.start_time, s.end_time] )
+				for stop_from, stop_to in it.product(stops_from, stops_to):
+					if stop_from == stop_to: fp_samestop_count += 1
+					fp_add(stop_from, stop_to, int(dt), dts_min, dts_max)
 
 		if len(stops):
 			fp_min, fp_min_samestop = conf.footpath_gen_thresholds
