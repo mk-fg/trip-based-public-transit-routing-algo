@@ -76,6 +76,7 @@ class TBRoutingEngine:
 		'''Creates Trip-Based Routing Engine from Timetable data.'''
 		self.conf, self.log = conf or EngineConf(), u.get_logger('tb')
 		self.timer_wrapper = timer_func if timer_func else lambda f,*a,**k: func(*a,**k)
+		self.jtrips_to_journeys = ft.partial(self.timer_wrapper, jtrips_to_journeys)
 
 		graph = cached_graph
 		if not graph:
@@ -288,7 +289,8 @@ class TBRoutingEngine:
 
 			n += 1
 
-		return jtrips_to_journeys(timetable.footpaths, stop_src, stop_dst, dts_src, results)
+		return self.jtrips_to_journeys(
+			timetable.footpaths, stop_src, stop_dst, dts_src, results )
 
 
 	@timer
@@ -385,7 +387,8 @@ class TBRoutingEngine:
 				n += 1
 			Q.clear() # to flush n > max_transfers leftovers there
 
-		return jtrips_to_journeys(timetable.footpaths, stop_src, stop_dst, dts_edt, results)
+		return self.jtrips_to_journeys(
+			timetable.footpaths, stop_src, stop_dst, dts_edt, results )
 
 
 	@timer
