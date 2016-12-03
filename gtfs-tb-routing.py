@@ -67,11 +67,12 @@ def main(args=None):
 			' Can produce smaller graphs that would be easier to query.')
 
 	group = parser.add_argument_group('Timetable calendar options')
-	group.add_argument('-d', '--day', metavar='YYYYMMDD',
+	group.add_argument('-d', '--day', metavar='{ YYYYMMDD | date }',
 		help='Specific date when trip is taking place.'
 			'Will also make script parse GTFS calendar data and only build'
 				' timetable for trips/footpaths/links active on specified day and its vicinity.'
 			' Without this option, all trips/etc will be used regardless of calendar info.'
+			' Format is either YYYYMMDD or something that "date -d ..." call would parse (e.g.: today).'
 			' See also --parse-days-after and --parse-days-before options.')
 	group.add_argument('--parse-days-after',
 		type=int, default=conf.parse_days, metavar='n',
@@ -170,9 +171,17 @@ def main(args=None):
 		datefmt='%Y-%m-%d %H:%M:%S',
 		level=tb.u.logging.DEBUG if opts.debug else tb.u.logging.WARNING )
 
+	day = opts.day
+	if not (day.isdigit() and len(day) == 8):
+		import subprocess
+		proc = subprocess.Popen(['date', '-d', day, '+%Y%m%d'], stdout=subprocess.PIPE)
+		day = proc.stdout.read().decode().strip()
+		if proc.wait() != 0: parser.error('"date -d" failed to parse --day value: {!r}'.format(day))
+		log.debug('Parsed --day value via "date -d" subprocess: {!r} -> {}', opts.day, day)
+
 	if opts.stops_to_stations: conf.group_stops_into_stations = True
 	conf.parse_start_date, conf.parse_days, conf.parse_days_pre =\
-		opts.day, opts.parse_days_after, opts.parse_days_before
+		day, opts.parse_days_after, opts.parse_days_before
 	timetable, router = init_gtfs_router( opts.gtfs_dir,
 		opts.cache, conf=conf, conf_engine=conf_engine,
 		path_timetable=opts.timetable, timer_func=calc_timer )
