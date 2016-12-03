@@ -153,9 +153,9 @@ def get_timespan_info( svc_calendar, svc_exceptions,
 		# Add datetime to svc_days for each date that service is operating on
 		for date_str, (exc, dt) in sorted(parse_days.items()):
 			if not exc:
-				if date_str < s.date_start: continue
-				elif date_str > s.date_end: break
-				if not sce.weekdays[date.weekday()]: continue
+				if date_str < sce.date_start: continue
+				elif date_str > sce.date_end: break
+				if not sce.weekdays[dt.weekday()]: continue
 			days[date_str] = dt
 
 	# Add days for exception-only services, not mentioned in svc_calendar at all
@@ -193,7 +193,7 @@ def calculate_trip_dts(dt_min, dt, offset_arr, offset_dep):
 		else: offset_arr = trip[-1].offset_dep # "scheduled based on the nearest preceding timed stop"
 	if not offset_dep: offset_dep = offset_arr
 	assert offset_arr and offset_dep
-	return offset_to_dts(dts_arr), offset_to_dts(dts_dep)
+	return tuple(offset_to_dts(dt_min, dt, o) for o in [offset_arr, offset_dep])
 
 def footpath_dt(stop_a, stop_b, delta_base, speed_kmh, math=math):
 	'''Calculate footpath time-delta (dt) between two stops,
@@ -299,13 +299,13 @@ def parse_timetable(gtfs_dir, conf):
 			if not (stops_from and stops_to): continue
 			delta = int(s.link_secs)
 			for dt in days:
-				if not bool(int(getattr(s, weekday_columns[day.weekday()]))): continue
+				if not bool(int(getattr(s, weekday_columns[dt.weekday()]))): continue
 				dts_min, dts_max = (
 					offset_to_dts(timespan_info.dt_min, dt, GTFSTimeOffset.parse(v))
 					for v in [s.start_time, s.end_time] )
 				for stop_from, stop_to in it.product(stops_from, stops_to):
 					if stop_from == stop_to: fp_samestop_count += 1
-					fp_add(stop_from, stop_to, int(dt), dts_min, dts_max)
+					fp_add(stop_from, stop_to, delta, dts_min, dts_max)
 
 		if len(stops):
 			fp_min, fp_min_samestop = conf.footpath_gen_thresholds
