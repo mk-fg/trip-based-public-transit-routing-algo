@@ -47,11 +47,17 @@ class Line:
 		'Sequence of Stops for all of the Trips on this Line.'
 		return list(map(op.attrgetter('stop'), self.set_idx[0].stops))
 
+	def hash_trips(self): return hash(tuple(map(op.attrgetter('id'), self.set_idx)))
+
 	_id_cache = None
 	@property
 	def id(self):
 		if not self._id_cache:
-			self._id_cache = hash(tuple(map(op.attrgetter('id'), self.set_idx)))
+			# Purely for ease of introspection/debugging
+			line_id_hints = sorted(set(filter( None,
+				map(op.attrgetter('line_id_hint'), self.set_idx) )))
+			if line_id_hints: self._id_cache = '/'.join(line_id_hints)
+			else: self._id_cache = self.hash_trips()
 		return self._id_cache
 	@id.setter
 	def id(self, value): self._id_cache = value
@@ -59,9 +65,6 @@ class Line:
 	def add(self, *trips):
 		self.set_idx.extend(trips)
 		self.set_idx.sort(key=lambda trip: sum(map(op.attrgetter('dts_arr'), trip)))
-		line_id_hints = sorted(set(filter( None,
-			map(op.attrgetter('line_id_hint'), self.set_idx) )))
-		if line_id_hints: self.id = '/'.join(line_id_hints) # purely for introspection/debugging
 
 	def earliest_trip(self, stopidx, dts=0):
 		for trip in self:
@@ -83,9 +86,9 @@ class Line:
 
 @u.attr_struct
 class LineStop:
-	line = u.attr_init()
+	line_id = u.attr_init()
 	stopidx = u.attr_init()
-	def __hash__(self): return hash((self.line.id, self.stopidx))
+	def __hash__(self): return hash((self.line_id, self.stopidx))
 
 
 class Lines:
@@ -100,12 +103,14 @@ class Lines:
 			for trip in line: self.idx_trip[trip] = line
 
 			# Resolve any potential line.id conflicts for named lines
+			# This should only be used/necessary for "nice" test-graphs
 			if line.id in self.idx_id and line is not self.idx_id[line.id]:
 				if self.idx_id[line.id]:
 					line2 = self.idx_id[line.id]
-					line2.id = '{}.{:x}'.format(line2.id, id(line2))
+					line2.id = '{}.{:x}'.format(line2.id, line2.hash_trips())
 					self.idx_id[line2.id], self.idx_id[line.id] = line2, None
-				line.id = '{}.{:x}'.format(line.id, id(line))
+				line.id = '{}.{:x}'.format(line.id, line.hash_trips())
+				assert line.id not in self.idx_id # trip-id-hash collisions
 			self.idx_id[line.id] = line
 
 	def lines_with_stop(self, stop):

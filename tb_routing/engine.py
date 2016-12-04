@@ -425,7 +425,7 @@ class TBRoutingEngine:
 
 		progress = self.progress_iter('transfer-patterns', len(timetable.stops))
 		for stop_src in timetable.stops:
-			progress.send(['tree-nodes={} (unique={})', sum(tree.stats.values()), len(tree.stats)])
+			progress.send(['tree-nodes={:,} (unique={:,})', sum(tree.stats.values()), len(tree.stats)])
 
 			stop_labels.clear()
 			trip_tails_checked.clear()
@@ -476,7 +476,7 @@ class TBRoutingEngine:
 					node = node_dst
 					for ts in reversed(sl.ts_list):
 						node_prev, node = node, subtree.node(
-							t.base.LineStop(lines.line_for_trip(ts.trip), ts.stopidx), no_path_to=node )
+							t.base.LineStop(lines.line_for_trip(ts.trip).id, ts.stopidx), no_path_to=node )
 						node_prev.edges_to.add(node)
 					node.edges_to.add(node_src)
 
@@ -552,11 +552,11 @@ class TBTPRoutingEngine:
 				#  hence added here as a special "exceptional" result.
 				results.add_exception(t.base.QueryResult(None, 0, list()))
 				continue
-			ls = node.value
-			ls_stop = ls.line.stops[ls.stopidx]
+			ls_line, ls_stopidx = lines[node.value.line_id], node.value.stopidx
+			ls_stop = ls_line.stops[ls_stopidx]
 			fp = None if ls_stop == stop_src else timetable.footpaths.get(stop_src, ls_stop)
-			for trip in ls.line:
-				ts = trip[ls.stopidx]
+			for trip in ls_line:
+				ts = trip[ls_stopidx]
 				fp_delta = 0 if fp is None else fp.get_shortest(dts_src=dts_edt, dts_dst=ts.dts_dep)
 				if fp_delta is None: continue
 				dts_min, dts_max = ts.dts_arr - fp_delta, ts.dts_dep - fp_delta
@@ -570,11 +570,11 @@ class TBTPRoutingEngine:
 
 			for node in node_src.edges_to:
 				if node.value != stop_dst:
-					ls = node.value
-					stop = ls.line.stops[ls.stopidx]
-				else: ls, stop = None, node.value # ... -> stop_dst
+					ls_line, ls_stopidx = lines[node.value.line_id], node.value.stopidx
+					stop = ls_line.stops[ls_stopidx]
+				else: ls_line, stop = None, node.value # ... -> stop_dst
 
-				if not ls: # lineN -> stop_dst
+				if not ls_line: # lineN -> stop_dst
 					dts = min(
 						(ts.dts_arr + timetable.footpaths.time_delta(
 							ts.stop, stop, dts_src=ts.dts_arr, default=u.inf ))
@@ -588,8 +588,8 @@ class TBTPRoutingEngine:
 					node_transfers = list( transfer
 						for ts in label_src.ts.trip[label_src.ts.stopidx+1:]
 						for transfer in transfers.from_trip_stop(ts)
-						if transfer.ts_to.stopidx == ls.stopidx
-							and lines.line_for_trip(transfer.ts_to.trip) == ls.line )
+						if transfer.ts_to.stopidx == ls_stopidx
+							and lines.line_for_trip(transfer.ts_to.trip) == ls_line )
 					if node_transfers:
 						transfer = min(node_transfers, key=op.attrgetter('ts_to.dts_arr'))
 						node_label = NodeLabel( label_src.dts_start,
