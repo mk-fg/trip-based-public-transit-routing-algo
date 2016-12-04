@@ -10,5 +10,5 @@
 *.pyc
 
 # Test caches
-/test/*.cache.pickle
+/test/*.cache.*
 /test/*.data.unzip/

@@ -72,17 +72,18 @@ class TBRoutingEngine:
 
 	graph = None
 
-	def __init__(self, timetable=None, conf=None, cached_graph=None, timer_func=None):
+	def __init__(self, timetable, conf=None, cached_graph=None, timer_func=None):
 		'''Creates Trip-Based Routing Engine from Timetable data.'''
 		self.conf, self.log = conf or EngineConf(), u.get_logger('tb')
-		self.timer_wrapper = timer_func if timer_func else lambda f,*a,**k: func(*a,**k)
+		self.timer_wrapper = timer_func if timer_func else lambda f,*a,**k: f(*a,**k)
 		self.jtrips_to_journeys = ft.partial(self.timer_wrapper, jtrips_to_journeys)
 
-		graph = cached_graph
-		if not graph:
+		if not cached_graph:
 			lines = self.timetable_lines(timetable)
 			transfers = self.precalc_transfer_set(timetable, lines)
 			graph = t.base.Graph(timetable, lines, transfers)
+		else:
+			graph = self.timer_wrapper(t.base.Graph.load, cached_graph, timetable)
 		self.graph = graph
 
 	@u.coroutine

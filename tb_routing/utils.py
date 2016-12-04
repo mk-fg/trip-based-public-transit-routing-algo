@@ -2,7 +2,7 @@ import itertools as it, operator as op, functools as ft
 from pathlib import Path
 from collections import UserList
 import os, sys, logging, datetime, base64
-import contextlib, tempfile, stat
+import contextlib, tempfile, stat, warnings
 
 import attr
 
@@ -95,6 +95,15 @@ def init_if_none(v, default):
 def same_type_and_id(v1, v2):
 	return type(v1) is type(v2) and v1.id == v2.id
 
+@contextlib.contextmanager
+def supress_warnings():
+	'''Similar to warnings.catch_warnings(),
+		but does not miss stuff like DeprecationWarning.'''
+	filters_bak = warnings.filters
+	warnings.filterwarnings('ignore')
+	try: yield
+	finally: warnings.filters[:] = filters_bak
+
 inf = float('inf')
 
 
@@ -124,7 +133,7 @@ pickle_log = get_logger('pickle')
 def pickle_dump(state, name=use_pickle_cache or 'state.pickle'):
 	import pickle
 	with safe_replacement(name, 'wb') as dst:
-		pickle_log.debug('Pickling data (type: {}) to: {}', state.__class__.__name__, name)
+		pickle_log.debug('Pickling data (type={}) to: {}', state.__class__.__name__, name)
 		pickle.dump(state, dst)
 
 def pickle_load(name=use_pickle_cache or 'state.pickle', fail=False):

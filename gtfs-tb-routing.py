@@ -9,42 +9,57 @@ import tb_routing as tb
 
 log = tb.u.get_logger('gtfs-cli')
 
-def calc_timer(func, *args, log=tb.u.get_logger('timer'), **kws):
-	func_id = '.'.join([func.__module__.strip('__'), func.__name__])
-	log.debug('[{}] Starting...', func_id)
+def calc_timer(func, *args, log=tb.u.get_logger('timer'), timer_name=None, **kws):
+	if not timer_name:
+		func_base = func if not isinstance(func, ft.partial) else func.func
+		timer_name = '.'.join([func_base.__module__.strip('__'), func_base.__qualname__])
+	log.debug('[{}] Starting...', timer_name)
 	td = time.monotonic()
 	data = func(*args, **kws)
 	td = time.monotonic() - td
-	log.debug('[{}] Finished in: {:.1f}s', func_id, td)
+	log.debug('[{}] Finished in: {:.1f}s', timer_name, td)
 	return data
 
-def init_gtfs_router( path, cache_path=None, cache_tt_path=None,
-		conf=None, conf_engine=None, path_timetable=False, timer_func=None ):
+def init_gtfs_router(
+		tt_path, graph_cache_path=None, tt_path_dump=None,
+		conf=None, conf_engine=None, timer_func=None ):
 	if not conf: conf = tb.gtfs.GTFSConf()
-	timetable_func = tb.gtfs.parse_timetable\
-		if not timer_func else ft.partial(timer_func, tb.gtfs.parse_timetable)
-	router_factory = ft.partial(
-		tb.engine.TBRoutingEngine, conf=conf_engine, timer_func=timer_func )
-	graph = tb.u.pickle_load(cache_path) if cache_path else None
-	if not graph:
-		path = Path(path)
-		if not path_timetable: timetable = timetable_func(path, conf)
-		else: timetable = tb.u.pickle_load(path, fail=True)
-		log.debug(
-			'Parsed timetable: stops={:,}, footpaths={:,}'
-				' (mean-delta={:,.1f}s, mean-options={:,.1f}, same-stop={:,}),'
-				' trips={:,} (mean-stops={:,.1f})',
-			len(timetable.stops), len(timetable.footpaths),
-			timetable.footpaths.stat_mean_delta(),
-			timetable.footpaths.stat_mean_delta_count(),
-			timetable.footpaths.stat_same_stop_count(),
-			len(timetable.trips), timetable.trips.stat_mean_stops() )
-		if cache_tt_path: tb.u.pickle_dump(timetable, cache_tt_path)
-		router = router_factory(timetable)
-		if cache_path: tb.u.pickle_dump(router.graph, cache_path)
+
+	timetable_func, router_func = tb.gtfs.parse_timetable,\
+		ft.partial(tb.engine.TBRoutingEngine, conf=conf_engine, timer_func=timer_func)
+	if timer_func:
+		timetable_func, router_func = (
+			ft.partial(timer_func, func) for func in [timetable_func, router_func] )
+
+	tt_path = Path(tt_path)
+	if tt_path.is_file():
+		tt_load = tb.u.pickle_load
+		if timer_func: tt_load = ft.partial(timer_func, tt_load, timer_name='timetable_load')
+		timetable = tt_load(tt_path, fail=True)
 	else:
-		timetable = graph.timetable
-		router = router_factory(cached_graph=graph)
+		timetable = timetable_func(tt_path, conf)
+		if tt_path_dump: tb.u.pickle_dump(timetable, tt_path_dump)
+	log.debug(
+		'Parsed timetable: stops={:,}, footpaths={:,}'
+			' (mean-delta={:,.1f}s, mean-options={:,.1f}, same-stop={:,}),'
+			' trips={:,} (mean-stops={:,.1f})',
+		len(timetable.stops), len(timetable.footpaths),
+		timetable.footpaths.stat_mean_delta(),
+		timetable.footpaths.stat_mean_delta_count(),
+		timetable.footpaths.stat_same_stop_count(),
+		len(timetable.trips), timetable.trips.stat_mean_stops() )
+
+	if graph_cache_path: graph_cache_path = Path(graph_cache_path)
+	if graph_cache_path and graph_cache_path.exists():
+		with open(str(graph_cache_path), 'rb') as src:
+			router = router_func(timetable, cached_graph=src)
+	else:
+		router = router_func(timetable)
+		if graph_cache_path:
+			graph_dump = router.graph.dump
+			if timer_func: graph_dump = ft.partial(timer_func, graph_dump)
+			with tb.u.safe_replacement(graph_cache_path, 'wb') as dst: graph_dump(dst)
+
 	return timetable, router
 
 
@@ -56,11 +71,11 @@ def main(args=None):
 	import argparse
 	parser = argparse.ArgumentParser(
 		description='Simple implementation of trip-based graph-db and algorithms.')
-	parser.add_argument('gtfs_dir', help='Path to gtfs data directory to build graph from.')
+	parser.add_argument('gtfs_dir_or_pickle',
+		help='Path to gtfs data directory to build'
+			' graph from or a pickled timetable object (if points to a file).')
 
 	group = parser.add_argument_group('Basic timetable/parser options')
-	group.add_argument('-t', '--timetable', action='store_true',
-		help='Treat "gtfs_dir" argument as a pickled TImetable object.')
 	group.add_argument('-c', '--cache', metavar='path',
 		help='Pickle cache-file to load (if exists)'
 			' or save (if missing) resulting graph data from/to.')
@@ -185,10 +200,9 @@ def main(args=None):
 	if opts.stops_to_stations: conf.group_stops_into_stations = True
 	conf.parse_start_date, conf.parse_days, conf.parse_days_pre =\
 		day, opts.parse_days_after, opts.parse_days_before
-	timetable, router = init_gtfs_router( opts.gtfs_dir,
-		opts.cache, opts.cache_timetable,
-		conf=conf, conf_engine=conf_engine,
-		path_timetable=opts.timetable, timer_func=calc_timer )
+	timetable, router = init_gtfs_router(
+		opts.gtfs_dir_or_pickle, opts.cache, tt_path_dump=opts.cache_timetable,
+		conf=conf, conf_engine=conf_engine, timer_func=calc_timer )
 
 	dot_opts = dict()
 	if opts.dot_opts:

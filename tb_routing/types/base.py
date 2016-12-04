@@ -1,9 +1,35 @@
 ### TBRoutingEngine internal types - base: lines, transfers, graph
 
 import itertools as it, operator as op, functools as ft
-import bisect
+import struct, array
 
 from .. import utils as u
+
+
+struct_dump_header_fmt = '>I'
+
+def struct_dumps(chunk_fmt, chunks, chunk_count=None):
+	header_t = struct.Struct(struct_dump_header_fmt)
+	if chunk_count is None: chunk_count = len(chunks)
+	chunk_t = struct.Struct(chunk_fmt)
+	buff_len = header_t.size + chunk_t.size * chunk_count
+	buff = bytearray(buff_len)
+	header_t.pack_into(buff, 0, chunk_count)
+	for n, (buff_n, chunk) in enumerate(zip(
+			range(header_t.size, buff_len, chunk_t.size), chunks )):
+		chunk_t.pack_into(buff, buff_n, *chunk)
+	assert n == chunk_count-1 and buff_n == buff_len-chunk_t.size
+	return buff
+
+def struct_load_iter(chunk_fmt, stream):
+	header_t = struct.Struct(struct_dump_header_fmt)
+	chunk_count, = header_t.unpack(stream.read(header_t.size))
+	chunk_t = struct.Struct(chunk_fmt)
+	chunk_buff_len = chunk_t.size * chunk_count
+	chunk_buff = stream.read(chunk_buff_len)
+	for n, buff_n in zip(
+			range(0, chunk_count), range(0, chunk_buff_len, chunk_t.size) ):
+		yield chunk_t.unpack_from(chunk_buff, buff_n)
 
 
 class Line:
@@ -88,6 +114,35 @@ class Lines:
 
 	def line_for_trip(self, trip): return self.idx_trip[trip]
 
+	_dump_prefix, _dump_t, _dump_sep = '>I', 'H', 2**16-1
+
+	def dump(self, stream):
+		dump = array.array(self._dump_t)
+		for line in self:
+			for trip in line:
+				assert trip.id != self._dump_sep, trip
+				dump.append(trip.id)
+			dump.append(self._dump_sep)
+		stream.write(struct.pack(self._dump_prefix, len(dump)))
+		dump.tofile(stream)
+
+	@classmethod
+	def load(cls, stream, timetable):
+		dump, prefix_t = array.array(cls._dump_t), struct.Struct(cls._dump_prefix)
+		dump_len, = prefix_t.unpack(stream.read(prefix_t.size))
+		with u.supress_warnings():
+			# DeprecationWarning about fromfile using fromstring internally
+			dump.fromfile(stream, dump_len)
+		self, line_trips = cls(), list()
+		for trip_id in dump:
+			if trip_id == cls._dump_sep:
+				self.add(Line(*line_trips))
+				line_trips.clear()
+				continue
+			line_trips.append(timetable.trips[trip_id])
+		assert not line_trips
+		return self
+
 	def __getitem__(self, line_id): return self.idx_id[line_id]
 	def __iter__(self): return iter(filter(None, self.idx_id.values()))
 	def __len__(self): return len(set(map(id, self.idx_trip.values())))
@@ -119,6 +174,24 @@ class TransferSet:
 		k1 = ts.trip.id, ts.stopidx
 		return self.set_idx.get(k1, dict()).values()
 
+	_dump_fmt = '>HBHBfI'
+
+	def dump(self, stream):
+		chunk_iter = (
+			( transfer.ts_from.trip.id, transfer.ts_from.stopidx,
+				transfer.ts_to.trip.id, transfer.ts_to.stopidx, transfer.dt, transfer.id )
+			for transfer in self )
+		stream.write(struct_dumps(self._dump_fmt, chunk_iter, len(self)))
+
+	@classmethod
+	def load(cls, stream, timetable):
+		self = cls()
+		for transfer_tuple in struct_load_iter(cls._dump_fmt, stream):
+			ts_from = timetable.trips[transfer_tuple[0]][transfer_tuple[1]]
+			ts_to = timetable.trips[transfer_tuple[2]][transfer_tuple[3]]
+			self.add(Transfer(ts_from, ts_to, transfer_tuple[4], transfer_tuple[5]))
+		return self
+
 	def __contains__(self, transfer):
 		k1, k2 = self.set_idx_keys[transfer.id]
 		return bool(self.set_idx.get(k1, dict()).get(k2))
@@ -135,6 +208,16 @@ class TransferSet:
 class Graph:
 	keys = 'timetable lines transfers'
 	def __iter__(self): return iter(u.attr.astuple(self, recurse=False))
+
+	def dump(self, stream):
+		self.lines.dump(stream)
+		self.transfers.dump(stream)
+
+	@classmethod
+	def load(cls, stream, timetable):
+		lines = Lines.load(stream, timetable)
+		transfers = TransferSet.load(stream, timetable)
+		return cls(timetable, lines, transfers)
 
 
 @u.attr_struct

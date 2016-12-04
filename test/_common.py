@@ -1,5 +1,5 @@
 import itertools as it, operator as op, functools as ft
-from collections import ChainMap, Mapping, OrderedDict
+from collections import ChainMap, Mapping, OrderedDict, defaultdict
 from pathlib import Path
 from pprint import pprint
 import os, sys, unittest, types, datetime, re, math
@@ -131,44 +131,10 @@ class GTFSTestFixture:
 		self.path_project = self.path_test.parent
 		self.path_tmp_base = '{}.test.{}'.format(
 			self.path_project.parent.resolve().name, self.path_file.stem )
+		self._path_cache_state = defaultdict(lambda: ...)
 
 	def load_test_data(self, name):
 		return load_test_data(self.path_test, self.path_file.stem, name)
-
-
-	_path_cache = ...
-	@property
-	def path_cache(self):
-		if self._path_cache is not ...: return self._path_cache
-		self._path_cache = None
-
-		paths_src = [Path(tb.__file__).parent, Path(gtfs_cli.__file__)]
-		paths_cache = [ self.path_test / '{}.cache.pickle'.format(self.path_file.stem),
-			Path(tempfile.gettempdir()) / '{}.cache.pickle'.format(self.path_tmp_base) ]
-
-		for p in paths_cache:
-			if not p.exists():
-				try:
-					p.touch()
-					p.unlink()
-				except OSError: continue
-			self._path_cache = p
-			break
-		else:
-			warnings.warn('Failed to find writable cache-path, disabling cache')
-			warnings.warn(
-				'Cache paths checked: {}'.format(' '.join(repr(str(p)) for p in paths_cache)) )
-
-		def paths_src_mtimes():
-			for root, dirs, files in it.chain.from_iterable(os.walk(str(p)) for p in paths_src):
-				p = Path(root)
-				for name in files: yield (p / name).stat().st_mtime
-		mtime_src = max(paths_src_mtimes())
-		mtime_cache = 0 if not self._path_cache.exists() else self._path_cache.stat().st_mtime
-		if mtime_cache and mtime_src > mtime_cache:
-			warnings.warn( 'Existing timetable/transfer cache'
-				' file is older than code, but using it anyway: {}'.format(self._path_cache) )
-		return self._path_cache
 
 
 	_path_unzip = None
@@ -202,6 +168,47 @@ class GTFSTestFixture:
 
 		self._path_unzip = path_unzip
 		return self._path_unzip
+
+
+	def _paths_src_mtimes(self):
+		paths_src = [Path(tb.__file__).parent, Path(gtfs_cli.__file__)]
+		for root, dirs, files in it.chain.from_iterable(os.walk(str(p)) for p in paths_src):
+			p = Path(root)
+			for name in files: yield (p / name).stat().st_mtime
+
+	def _path_cache(self, ext):
+		path = self._path_cache_state[ext]
+		if path is not ...: return state
+		path = self._path_cache_state[ext] = None
+
+		paths_cache = [ self.path_test / '{}.cache.{}'.format(self.path_file.stem, ext),
+			Path(tempfile.gettempdir()) / '{}.cache.{}'.format(self.path_tmp_base, ext) ]
+
+		for p in paths_cache:
+			if not p.exists():
+				try:
+					p.touch()
+					p.unlink()
+				except OSError: continue
+			path = self._path_cache_state[ext] = p
+			break
+		else:
+			warnings.warn('Failed to find writable cache-path, disabling cache')
+			warnings.warn(
+				'Cache paths checked: {}'.format(' '.join(repr(str(p)) for p in paths_cache)) )
+
+		mtime_src = max(self._paths_src_mtimes())
+		mtime_cache = 0 if not path.exists() else path.stat().st_mtime
+		if mtime_cache and mtime_src > mtime_cache:
+			warnings.warn( 'Existing timetable/transfer cache'
+				' file is older than code, but using it anyway: {}'.format(path) )
+		return path
+
+	@property
+	def path_cache(self): return self._path_cache('graph.bin')
+
+	@property
+	def path_timetable(self): return self._path_cache('tt.pickle')
 
 
 

@@ -1,5 +1,5 @@
 import itertools as it, operator as op, functools as ft
-from collections import namedtuple, defaultdict, UserList
+from collections import namedtuple, defaultdict
 import enum, datetime, contextlib
 
 from .. import utils as u
@@ -221,13 +221,6 @@ class Trip:
 	id = u.attr_init_id()
 	line_id_hint = u.attr_init(None) # can be set for introspection/debugging
 
-	def __hash__(self): return hash(self.id)
-	def __eq__(self, trip): return u.same_type_and_id(self, trip)
-	def __repr__(self): # mostly to avoid recursion
-		return 'Trip(id={line_id_hint}{0.id}, stops={stops})'.format(
-			self, stops=len(self.stops),
-			line_id_hint='{}:'.format(self.line_id_hint) if self.line_id_hint else '' )
-
 	def add(self, stop):
 		assert stop.dts_arr <= stop.dts_dep
 		assert not self.stops or self.stops[-1].dts_dep <= stop.dts_arr
@@ -242,17 +235,32 @@ class Trip:
 		if not check: return SolutionStatus.equal
 		return SolutionStatus.undecidable
 
+	def __hash__(self): return hash(self.id)
+	def __eq__(self, trip): return u.same_type_and_id(self, trip)
+	def __repr__(self): # mostly to avoid recursion
+		return 'Trip(id={line_id_hint}{0.id}, stops={stops})'.format(
+			self, stops=len(self.stops),
+			line_id_hint='{}:'.format(self.line_id_hint) if self.line_id_hint else '' )
+
 	def __getitem__(self, n): return self.stops[n]
 	def __len__(self): return len(self.stops)
 	def __iter__(self): return iter(self.stops)
 
-class Trips(UserList):
+class Trips:
+
+	def __init__(self): self.set_idx = dict()
+
 	def add(self, trip):
 		assert len(trip) >= 2, trip
-		self.append(trip)
+		self.set_idx[trip.id] = trip
+
 	def stat_mean_stops(self):
 		if not len(self): return 0
 		return (sum(len(t) for t in self) / len(self))
+
+	def __getitem__(self, trip_id): return self.set_idx[trip_id]
+	def __len__(self): return len(self.set_idx)
+	def __iter__(self): return iter(self.set_idx.values())
 
 
 @u.attr_struct(defaults=None)

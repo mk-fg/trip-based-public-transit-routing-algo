@@ -13,8 +13,12 @@ class GTFS_Shizuoka_20161013(unittest.TestCase):
 		path_file = Path(__file__)
 		path_gtfs_zip = path_file.parent / (path_file.stem + '.data.2016-10-13.zip')
 		cls.fx = c.GTFSTestFixture(path_gtfs_zip, path_file)
+
+		tt_path, tt_path_dump = cls.fx.path_timetable, None
+		if not tt_path.exists(): tt_path, tt_path_dump = cls.fx.path_unzip, tt_path
+
 		cls.timetable, cls.router = c.gtfs_cli.init_gtfs_router(
-			cls.fx.path_unzip, cls.fx.path_cache, timer_func=c.gtfs_cli.calc_timer )
+			tt_path, cls.fx.path_cache, tt_path_dump, timer_func=c.gtfs_cli.calc_timer )
 		cls.checks = c.GraphAssertions(cls.router.graph)
 
 	@classmethod
