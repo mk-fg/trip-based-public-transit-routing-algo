@@ -32,6 +32,7 @@ class TPNode:
 			' out-edges={2}>' ).format(self.seed, self.id, len(self.edges_to))
 
 
+TPTreeCounters = namedtuple('TPTreeCounters', 'total prefix')
 TPTreeStats = namedtuple('TPTreeStats', 'nodes nodes_unique t_src t_stop t_line edges')
 class TPTreeLookupError(Exception): pass
 
@@ -39,12 +40,13 @@ class TPTree:
 
 	def __init__(self, tree=None, stats=None, prefix=None):
 		self.prefix, self.tree = prefix, u.init_if_none(tree, dict)
-		self.stats = u.init_if_none(stats, Counter)
+		self.stats = u.init_if_none(stats, lambda: TPTreeCounters(Counter(), Counter()))
 
 	def stat_counts(self):
-		count_node_t = lambda t,s=self.stats: sum(v for k,v in s.items() if k[0] == t)
+		stats = self.stats.total
+		count_node_t = lambda t: sum(v for k,v in stats.items() if k[0] == t)
 		return TPTreeStats(
-			sum(self.stats.values()), len(self.stats),
+			sum(stats.values()), len(stats),
 			count_node_t('src'), count_node_t('stop'), count_node_t('linestop'),
 			sum(len(node.edges_to)
 				for subtree in ([self.tree] if self.prefix else self.tree.values())
@@ -65,6 +67,7 @@ class TPTree:
 			If no_path_to node is passed, returned node will never
 				have a path to it, creating another same-k node if necessary.'''
 		assert self.prefix, 'Can only add elements to prefixed subtree'
+		no_path_to = None # XXX: it should be ok to bypass this check, but not 100% sure
 		if isinstance(k, TPNode): k = k.value
 		if not t: node_id = TPNodeID.for_k_type(self.prefix, k)
 		else: node_id = TPNodeID(self.prefix, t, k)
@@ -72,7 +75,8 @@ class TPTree:
 		if node_id not in self.tree:
 			node = TPNode(value, node_id)
 			self.tree[node_id] = {node.seed: node}
-			self.stats[node_id.t, node_id.k] += 1
+			self.stats.total[node_id.t, node_id.k] += 1 # nodes by type/key
+			self.stats.prefix[self.prefix] += 1 # nodes for each prefix
 		else:
 			node_dict = self.tree[node_id]
 			if not no_path_to: node = next(iter(node_dict.values()))

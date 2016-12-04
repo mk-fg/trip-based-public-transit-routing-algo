@@ -423,9 +423,16 @@ class TBRoutingEngine:
 				i_min = min(i, trip_tails_checked.get((n, trip_u), i_max))
 				for m in range(n, max_transfers+1): trip_tails_checked[m, trip_u] = i_min
 
+		subtree_stats = Counter()
 		progress = self.progress_iter('transfer-patterns', len(timetable.stops))
 		for stop_src in timetable.stops:
-			progress.send(['tree-nodes={:,} (unique={:,})', sum(tree.stats.values()), len(tree.stats)])
+			means = subtree_stats['count']
+			if means == 0: means = [0, 0, 0]
+			else: means = list(int(subtree_stats[k] / means) for k in ['nodes', 'depth', 'dst'])
+			progress.send([
+				'tree-nodes={:,} (unique={:,}),'
+					' subtree means: nodes={:,} depth={:,} breadth/dst-count={:,}',
+				sum(tree.stats.total.values()), len(tree.stats.total) ] + means)
 
 			stop_labels.clear()
 			trip_tails_checked.clear()
@@ -465,7 +472,7 @@ class TBRoutingEngine:
 							for transfer in transfers.from_trip_stop(ts):
 								enqueue(transfer.ts_to.trip, transfer.ts_to.stopidx, ts_list)
 
-			subtree = tree[stop_src]
+			subtree, subtree_depth = tree[stop_src], list()
 			node_src = subtree.node(stop_src, t='src')
 			for stop_dst, sl_set in stop_labels.items():
 				node_dst = subtree.node(stop_dst)
@@ -473,12 +480,16 @@ class TBRoutingEngine:
 					node_prev.edges_to.add(node_src)
 					continue
 				for sl in sl_set:
-					node = node_dst
+					node, depth = node_dst, 0
 					for ts in reversed(sl.ts_list):
 						node_prev, node = node, subtree.node(
 							t.base.LineStop(lines.line_for_trip(ts.trip).id, ts.stopidx), no_path_to=node )
 						node_prev.edges_to.add(node)
+						depth += 1
 					node.edges_to.add(node_src)
+					subtree_depth.append(depth)
+			subtree_stats.update(dict( count=1, dst=len(stop_labels),
+				depth=u.max(subtree_depth, 0), nodes=tree.stats.prefix[stop_src] ))
 
 		self.log.debug(
 			'Search-tree stats: nodes={0.nodes:,} (unique={0.nodes_unique:,},'

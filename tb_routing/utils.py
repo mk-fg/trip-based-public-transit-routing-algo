@@ -106,6 +106,18 @@ def supress_warnings():
 
 inf = float('inf')
 
+def max(iterable, default=..., _max=max, **kws):
+	try: return _max(iterable, **kws)
+	except ValueError:
+		if default is ...: raise
+		return default
+
+def min(iterable, default=..., _min=min, **kws):
+	try: return _min(iterable, **kws)
+	except ValueError:
+		if default is ...: raise
+		return default
+
 
 @contextlib.contextmanager
 def safe_replacement(path, *open_args, mode=None, **open_kws):
