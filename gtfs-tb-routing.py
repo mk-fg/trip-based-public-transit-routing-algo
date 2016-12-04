@@ -114,6 +114,9 @@ def main(args=None):
 	group.add_argument('--dot-opts', metavar='yaml-data',
 		help='Options for graphviz graph/nodes/edges to use with all'
 			' --dot-for-* commands, as a YAML mappings. Example: {graph: {rankdir: LR}}')
+	group.add_argument('--engine-conf', metavar='yaml-data',
+		help='Override values for EngineConf as a YAML mapping.'
+			' Example: {log_progress_steps: 1000}')
 	group.add_argument('--debug', action='store_true', help='Verbose operation mode.')
 
 	cmds = parser.add_subparsers(title='Commands', dest='call')
@@ -198,6 +201,13 @@ def main(args=None):
 		log.debug('Parsed --day value via "date -d" subprocess: {!r} -> {}', opts.day, day)
 
 	if opts.stops_to_stations: conf.group_stops_into_stations = True
+	if opts.engine_conf:
+		import yaml
+		for k, v in yaml.safe_load(opts.engine_conf).items():
+			if not hasattr(conf_engine, k):
+				parser.error('Unrecognized engine conf option: {!r} (value: {!r})'.format(k, v))
+			setattr(conf_engine, k, v)
+
 	conf.parse_start_date, conf.parse_days, conf.parse_days_pre =\
 		day, opts.parse_days_after, opts.parse_days_before
 	timetable, router = init_gtfs_router(
