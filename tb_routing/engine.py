@@ -542,7 +542,7 @@ class TBTPRoutingEngine:
 				' stops={0.t_stop:,}, line-stops={0.t_line:,}), edges={0.edges:,}', qt_stats )
 		return query_tree if qt_stats.nodes > 0 else None
 
-
+	@timer
 	def query_profile(self, stop_src, stop_dst, dts_edt, dts_ldt, query_tree=..., max_transfers=15):
 		timetable, lines, transfers = self.graph
 		if query_tree is ...: query_tree = self.build_query_tree(stop_src, stop_dst)

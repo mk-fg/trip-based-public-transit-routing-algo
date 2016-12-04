@@ -64,8 +64,8 @@ def dot_for_tp_subtree(subtree, dst, dst_to_src=False, dot_opts=None):
 			v = v.name
 			if 'stop' in pre_type: v = '{}:{}'.format(pre_type['stop'], v)
 		elif isinstance(v, t.base.LineStop):
-			line_id = v.line.id
-			if isinstance(v.line.id, int): line_id = '{:x}'.format(line_id)
+			line_id = v.line_id
+			if isinstance(v.line_id, int): line_id = '{:x}'.format(line_id)
 			v = '{}:{}[{}]'.format(node.seed, line_id, v.stopidx)
 			if 'line' in pre_type: v = '{}:{}'.format(pre_type['line'], v)
 		else: raise ValueError(type(v), v)
