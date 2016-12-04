@@ -138,11 +138,12 @@ def main(args=None):
 			trips.add(trip)
 			trip_prev = trip
 
-	for stop in stops: footpaths.add(stop, stop, conf.dt_ch*60)
-	for stop_a, stop_b in it.permutations(stops, 2):
-		footpaths.add( stop_a, stop_b,
-			int(calc_dt_fp(dist(stop_a, stop_b), conf.fp_kmh, conf.fp_dt_base)) )
-	footpaths.discard_longer(conf.fp_dt_max*60)
+	with footpaths.populate() as fp_add:
+		fp_delta_max = conf.fp_dt_max * 60
+		for stop in stops: fp_add(stop, stop, conf.dt_ch*60)
+		for stop_a, stop_b in it.permutations(stops, 2):
+			fp_delta = int(calc_dt_fp(dist(stop_a, stop_b), conf.fp_kmh, conf.fp_dt_base))
+			if fp_delta <= fp_delta_max: fp_add( stop_a, stop_b, fp_delta)
 
 	timetable = types.Timetable(stops, footpaths, trips)
 	with pathlib.Path(opts.tt_pickle).open('wb') as dst: pickle.dump(timetable, dst)
