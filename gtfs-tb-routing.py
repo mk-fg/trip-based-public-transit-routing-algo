@@ -21,7 +21,7 @@ def calc_timer(func, *args, log=tb.u.get_logger('timer'), timer_name=None, **kws
 	return data
 
 def init_gtfs_router(
-		tt_path, graph_cache_path=None, tt_path_dump=None,
+		tt_path, cache_path=None, tt_path_dump=None,
 		conf=None, conf_engine=None, timer_func=None ):
 	if not conf: conf = tb.gtfs.GTFSConf()
 
@@ -49,16 +49,16 @@ def init_gtfs_router(
 		timetable.footpaths.stat_same_stop_count(),
 		len(timetable.trips), timetable.trips.stat_mean_stops() )
 
-	if graph_cache_path: graph_cache_path = Path(graph_cache_path)
-	if graph_cache_path and graph_cache_path.exists():
-		with open(str(graph_cache_path), 'rb') as src:
+	if cache_path: cache_path = Path(cache_path)
+	if cache_path and cache_path.exists():
+		with open(str(cache_path), 'rb') as src:
 			router = router_func(timetable, cached_graph=src)
 	else:
 		router = router_func(timetable)
-		if graph_cache_path:
+		if cache_path:
 			graph_dump = router.graph.dump
 			if timer_func: graph_dump = ft.partial(timer_func, graph_dump)
-			with tb.u.safe_replacement(graph_cache_path, 'wb') as dst: graph_dump(dst)
+			with tb.u.safe_replacement(cache_path, 'wb') as dst: graph_dump(dst)
 
 	return timetable, router
 
@@ -76,11 +76,17 @@ def main(args=None):
 			' graph from or a pickled timetable object (if points to a file).')
 
 	group = parser.add_argument_group('Basic timetable/parser options')
-	group.add_argument('-c', '--cache', metavar='path',
-		help='Pickle cache-file to load (if exists)'
-			' or save (if missing) resulting graph data from/to.')
 	group.add_argument('--cache-timetable', metavar='path',
-		help='Pickle parsed timetable data to a specified file.')
+		help='Store parsed timetable data (in pickle format) to specified file.'
+			' This file can then be used in place of gtfs dir, and should load much faster.'
+			' All of the "Timetable calendar options" only affect how'
+				' the timetable data is parsed and that file generated,'
+				' and can be dropped after that.')
+	group.add_argument('-c', '--cache-precalc', metavar='path',
+		help='Precalculation cache file to load (if exists)'
+				' or save (if missing) resulting graph data from/to.'
+			' This option must only be used with cached'
+				' timetable data (see --cache-timetable option).')
 	group.add_argument('-s', '--stops-to-stations', action='store_true',
 		help='Convert/translate GTFS "stop" ids to "parent_station" ids,'
 				' i.e. group all stops on the station into a single one.'
@@ -120,6 +126,10 @@ def main(args=None):
 	group.add_argument('--debug', action='store_true', help='Verbose operation mode.')
 
 	cmds = parser.add_subparsers(title='Commands', dest='call')
+
+
+	cmd = cmds.add_parser('cache',
+		help='Generate/store all the caches and exit.')
 
 
 	cmd = cmds.add_parser('query-earliest-arrival',
@@ -192,6 +202,12 @@ def main(args=None):
 		datefmt='%Y-%m-%d %H:%M:%S',
 		level=tb.u.logging.DEBUG if opts.debug else tb.u.logging.WARNING )
 
+	tt_path = Path(opts.gtfs_dir_or_pickle)
+	cache_path = opts.cache_precalc and Path(opts.cache_precalc)
+	if not tt_path.is_file() and cache_path and cache_path.is_file():
+		parser.error( 'Pre-generated --cache-precalc dump can only'
+			' be used with cached timetable (see --cache-timetable option).' )
+
 	day = opts.day
 	if day and not (day.isdigit() and len(day) == 8):
 		import subprocess
@@ -210,8 +226,9 @@ def main(args=None):
 
 	conf.parse_start_date, conf.parse_days, conf.parse_days_pre =\
 		day, opts.parse_days_after, opts.parse_days_before
+
 	timetable, router = init_gtfs_router(
-		opts.gtfs_dir_or_pickle, opts.cache, tt_path_dump=opts.cache_timetable,
+		tt_path, cache_path, tt_path_dump=opts.cache_timetable,
 		conf=conf, conf_engine=conf_engine, timer_func=calc_timer )
 
 	dot_opts = dict()
@@ -223,7 +240,9 @@ def main(args=None):
 			tb.vis.dot_for_lines(router.graph.lines, dst, dot_opts=dot_opts)
 		return
 
-	if opts.call == 'query-earliest-arrival':
+	if opts.call == 'cache': pass
+
+	elif opts.call == 'query-earliest-arrival':
 		dts_start = timetable.dts_parse(opts.day_time)
 		a, b = timetable.stops[opts.stop_from], timetable.stops[opts.stop_to]
 		journeys = router.query_earliest_arrival(a, b, dts_start)

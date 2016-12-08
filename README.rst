@@ -18,8 +18,8 @@ following papers:
 See "Links" section below for more references.
 
 Not focused on performance too much, mostly data structures layout and
-algo-correctness, i.e. just a proof of concept, not suitable for any kind of
-production use.
+algo-correctness, i.e. just a proof of concept or reference code,
+not suitable for any kind of production use.
 
 |
 
@@ -46,11 +46,16 @@ so it might take much longer than necessary and eat all the RAM regardless.
 Command-line script
 ```````````````````
 
-Usage: ``./gtfs-tb-routing.py gtfs-data-dir stop-id-src stop-id-dst [start-time]``
+Usage: ``./gtfs-tb-routing.py [options] gtfs-data-dir-or-file command ...``
 
-That runs earliest-arrival/min-transfers bi-criteria query on (unpacked) GTFS
-data from specified dir and pretty-prints resulting pareto-optimal JourneySet to
-stdout.
+For example, to run a profile query on an (unpacked) GTFS data from specified
+dir and pretty-print resulting (pareto-optimal) JourneySet to stdout,
+``query-profile`` command can be used::
+
+  ./gtfs-tb-routing.py gtfs-data query-profile stop-A stop-B
+
+See ``./gtfs-tb-routing.py --help`` command output for a full list of all
+supported/implemented commands and options.
 
 Some sample GTFS data zips can be found in ``test/`` directory.
 
@@ -69,7 +74,12 @@ Example usage::
     inflating: gtfs-shizuoka/stop_times.txt
     inflating: gtfs-shizuoka/shapes.txt
 
-  % time ./gtfs-tb-routing.py gtfs-shizuoka -c gtfs-shizuoka.cache.pickle \
+  % ./gtfs-tb-routing.py gtfs-shizuoka \
+      --debug --day 2016-10-14 \
+      --cache-timetable gtfs-shizuoka.pickle \
+      --cache-precalc gtfs-shizuoka.cache cache
+
+  % ./gtfs-tb-routing.py gtfs-shizuoka.pickle -c gtfs-shizuoka.cache \
       query-earliest-arrival J22209723_0 J2220952426_0
 
   Journey set (1):
@@ -80,9 +90,8 @@ Example usage::
       trip [97]:
         from (dep at 08:35:00): 20:島田駅 北口２番のりば [J222093340_2]
         to (arr at 08:43:00): 28:ばらの丘一丁目 [J2220952426_0]
-  ./gtfs-tb-routing.py ... 8.39s user 0.06s system 99% cpu 8.454 total
 
-  % time ./gtfs-tb-routing.py gtfs-shizuoka -c gtfs-shizuoka.cache.pickle \
+  % ./gtfs-tb-routing.py gtfs-shizuoka.pickle -c gtfs-shizuoka.cache \
       query-earliest-arrival J22209843_0 J222093345_0
 
   Journey set (1):
@@ -96,10 +105,9 @@ Example usage::
       trip [7]:
         from (dep at 07:33:00): 38:島田駅 北口２番のりば [J222093340_2]
         to (arr at 07:41:00): 45:島田市民病院 [J222093345_0]
-  ./gtfs-tb-routing.py ... 0.85s user 0.04s system 99% cpu 0.894 total
 
 
-  % ./gtfs-tb-routing.py gtfs-shizuoka -c gtfs-shizuoka.cache.pickle \
+  % ./gtfs-tb-routing.py gtfs-shizuoka.pickle -c gtfs-shizuoka.cache \
       query-profile J22209723_0 J2220952426_0
 
   Journey set (8):
@@ -125,8 +133,13 @@ Example usage::
   ...
 
 
-Note that second query is much faster due to ``--cache gtfs-shizuoka.cache.pickle``
-option, which allows to reuse pre-calculated data from the first query.
+Note that ``cache`` command is used before queries to cache both timetable (for
+a specific day and its vicinity) and precalculation result (lines, transfer set)
+to avoid doing that for every subsequent query.
+
+Queries above do not use calendar data, i.e. all trips from the timetable are
+considered to be valid. To use calendar data, use ``-d/--day``, ``--parse-days``
+and ``--parse-days-pre`` options.
 
 Use ``--debug`` option to see pre-calculation progress (useful for large datasets)
 and misc other stats and logging.
@@ -152,7 +165,7 @@ Requirements
 - `attrs <https://attrs.readthedocs.io/en/stable/>`_
 - (only if gtfs calendar.txt is used) `pytz <http://pytz.sourceforge.net/>`_
 - (for tests only) `PyYAML <http://pyyaml.org/>`_
-- (for Python<3.4 only) `pathlib2 <https://pypi.python.org/pypi/pathlib2/>`_
+- (for Python<3.4 only) `pathlib <https://pypi.python.org/pypi/pathlib/>`_
 - (for Python<3.4 only) `enum34 <https://pypi.python.org/pypi/enum34/>`_
 
 To install all these on any random system (to ``~/.local/`` with ``--user``)::
@@ -162,10 +175,10 @@ To install all these on any random system (to ``~/.local/`` with ``--user``)::
   [PyPy 5.5.0-alpha0 with GCC 6.2.1 20160830]
 
   % python3 -m ensurepip --user
-  % python3 -m pip install --user attrs pyyaml
+  % python3 -m pip install --user attrs pyyaml pytz
 
    ## For python<3.4 only, but safe to run on later ones as well
-  % python3 -m pip install --user pathlib2 enum34
+  % python3 -m pip install --user pathlib enum34
 
    ## Done, run the app/tests
   % ./gtfs-tb-routing.py --help
@@ -183,6 +196,43 @@ Notes
 -----
 
 Some less obvious things are described in this section.
+
+
+Calendar data
+`````````````
+
+Real-world GTFS feeds usually have calendar.txt or calendar_dates.txt files in
+them (and e.g. gbrail.info even has links.txt for time-dependent footpaths),
+which define whether specific sets of trips (services) are valid/invalid for
+specific date/time ranges.
+
+In addition to providing correct results, this info can be used to greatly
+reduce the initial timetable (by not considering all trips that aren't valid for
+specific day) and transfer set size (as some transfers aren't valid due to time
+when trips' services operate).
+
+So to work with any real-world feed, be sure to use ``-d/--day`` option (and
+asoociated ones), as that'd both improve performance and provide correct results.
+
+Default is to parse and consider all trips to be valid for all days.
+
+
+Generated transfers/footpaths
+`````````````````````````````
+
+Not all GTFS data contains (optional) transfers.txt files, and sometimes these
+are very slim or just empty.
+
+Algorithm used here relies on having both "footpath" links between different
+stops and even within same stop ("interchange time" - how soon one can board
+different trip after exiting from the last one at the same stop).
+
+So gtfs parser module, by default, generates fotpaths based on stop locations
+(lon/lat) and a bunch of static parameters (like 2 min "base"
+interchange/walking time and 5 km/h walking speed), if such data is missing or
+doesn't even contain half of interchange times for stops.
+
+Such generation process can be configured somewhat via ``tb_routing.gtfs.GTFSConf``.
 
 
 Journey optimality criterias
@@ -208,13 +258,16 @@ preferred over later ones in case of ties.
 Caching
 ```````
 
-``--cache-timetable`` and ``-c/--cache`` options allow to cache
+``--cache-timetable`` and ``-c/--precalc-cache`` options allow to cache
 gtfs-processing/pre-computation results and re-use them between queries, which
 can be very useful when working with non-trivial (e.g. real-world) datasets,
 
-These options can and should be used together, or at least in that order,
-as tuples in TransferSet dumped with ``-c/--cache`` refer to ids of objects in
-Timetable.
+These options can and should be used together, or at least in that order, as
+tuples in TransferSet dumped with ``-c/--precalc-cache`` refer to ids of objects
+in Timetable.
+
+``./gtfs-tb-routing.py ... --cache-timetable ... --cache-precalc ... cache``
+command can be used to simply generate all the caches and exit.
 
 ``--cache-timetable`` uses pickle serialization, so can be quite slow,
 especially when saving data.
