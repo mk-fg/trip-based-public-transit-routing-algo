@@ -349,7 +349,7 @@ class TBRoutingEngine:
 						fp.get_shortest(dts_src=dts_edt, dts_dst=trip[i].dts_dep)
 					if fp_delta is None: continue
 					dts_min, dts_max = trip[i].dts_arr - fp_delta, trip[i].dts_dep - fp_delta
-					if not (dts_edt <= u.dts_wrap(dts_max) or dts_ldt <= u.dts_wrap(dts_min)): continue
+					if not (dts_edt <= dts_max and dts_ldt >= dts_min): continue
 					profile_queue.append(DepartureCriteriaCheck(trip, i, min(dts_ldt, dts_max), list()))
 		# Latest departures are processed first because labels (R) are reused for the whole query,
 		#  and journeys with later-dep-time dominate earlier, so they are processed first and all
@@ -571,7 +571,7 @@ class TBTPRoutingEngine:
 				fp_delta = 0 if fp is None else fp.get_shortest(dts_src=dts_edt, dts_dst=ts.dts_dep)
 				if fp_delta is None: continue
 				dts_min, dts_max = ts.dts_arr - fp_delta, ts.dts_dep - fp_delta
-				if not (dts_edt <= u.dts_wrap(dts_max) or dts_ldt <= u.dts_wrap(dts_min)): continue
+				if not (dts_edt <= dts_max and dts_ldt >= dts_min): continue
 				prio_queue.push(NodeLabelCheck(
 					node, NodeLabel(min(dts_ldt, dts_max), ts, 0, [trip]) ))
 
