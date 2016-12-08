@@ -17,11 +17,9 @@ following papers:
 
 See "Links" section below for more references.
 
-Not focused on performance much, mostly readability and algo-correctness
-aspects, i.e. just a proof of concept, not suitable for any kind of production use.
-
-Under heavy development, see `doc/TODO <doc/TODO>`_ file for a general list
-of things that are not (yet?) implemented.
+Not focused on performance too much, mostly data structures layout and
+algo-correctness, i.e. just a proof of concept, not suitable for any kind of
+production use.
 
 |
 
@@ -41,8 +39,8 @@ Regardless of interface, highly recommend using PyPy3 (3.3+) to run the thing,
 as it gives orders-of-magnitude performance boost here over CPython, and
 transfer-set pre-calculation with large datasets can take a while.
 
-Also, as mentioned, no attempt at multi-thread or memory optimizations is made
-here, so it will take much longer than necessary and eat all the RAM regardless.
+No dedicated attempt at parallelization or memory optimizations is made here,
+so it might take much longer than necessary and eat all the RAM regardless.
 
 
 Command-line script
@@ -210,9 +208,16 @@ preferred over later ones in case of ties.
 Caching
 ```````
 
-For large datasets, using pickle cache (``-c/--cache`` cli option) to
-(de-)serialize graphs can be slower than re-calculating whole thing from
-scratch, so might not be worth using.
+``--cache-timetable`` and ``-c/--cache`` options allow to cache
+gtfs-processing/pre-computation results and re-use them between queries, which
+can be very useful when working with non-trivial (e.g. real-world) datasets,
+
+These options can and should be used together, or at least in that order,
+as tuples in TransferSet dumped with ``-c/--cache`` refer to ids of objects in
+Timetable.
+
+``--cache-timetable`` uses pickle serialization, so can be quite slow,
+especially when saving data.
 
 
 Tests
@@ -234,9 +239,9 @@ Performance optimization
 ````````````````````````
 
 Pre-calculation in Trip-Based routing algorithm, as noted in paper, is very
-suitable for further optimization from how it's presented there - i.e. three
-separate "steps" can be merged into one loop, running processing of transfers
-for each trip in parallel with minimal synchronization.
+suitable for further optimization, especially on multi-core systems, where each
+trip in the main loop there can be processed in parallel with minimal
+synchronization.
 
 Python does not provide an easy way to optimize such processing, especially due
 to slow serialization of high-level objects and lack of support for cpu-bound
@@ -285,7 +290,8 @@ by json-dgc, and can be loaded/tweaked there or used as a template to generate
 with some other tool (just two lists of all nodes / edges).
 
 Generated timetable pickle file can be loaded by ``gtfs-tb-routing.py`` cli
-script (instead of gtfs data) using ``-t/--timetable`` option.
+script by simply pointing it to a file with pickled timetable instead of gtfs
+dir.
 
 
 Using graphviz to render internal graphs
