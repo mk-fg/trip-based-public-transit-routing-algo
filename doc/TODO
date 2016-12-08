@@ -1,15 +1,10 @@
 
-- Proper --day and query-profile (and such) edt/ldt times processing.
-
-  Currently these don't work correctly with --parse-days-pre > 0, as they're
-  parsed naively, without adding dt_start offser.
-
-- Parse gtfs frequences.txt, if available.
-
 - Implement profile queries optimization from the arXiv:1607.01299v2 paper.
 
 - Implement optimizations of shortest-path algo from arXiv:1607.01299v2 paper,
   based on "Multi-criteria Shortest Paths in Time-Dependent Train Networks" paper.
+
+- Parse gtfs frequences.txt, if available.
 
 - Some interactive querying interface for the thing would be nice to have - can
   be simple WebUI or something like ipynb.

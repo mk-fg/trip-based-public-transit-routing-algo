@@ -83,11 +83,11 @@ Example usage::
       query-earliest-arrival J22209723_0 J2220952426_0
 
   Journey set (1):
-    Journey 5596f26afe50 (arrival: 08:43:00, trips: 2):
-      trip [95]:
+    Journey 33883d2af26ea29d (arrival: 08:43:00, trips: 2, duration: 02:33:00):
+      trip [333]:
         from (dep at 06:10:00): 10:小川 [J22209723_0]
         to (arr at 06:55:00): 49:島田駅 北口２番のりば [J222093340_2]
-      trip [97]:
+      trip [341]:
         from (dep at 08:35:00): 20:島田駅 北口２番のりば [J222093340_2]
         to (arr at 08:43:00): 28:ばらの丘一丁目 [J2220952426_0]
 
@@ -95,14 +95,14 @@ Example usage::
       query-earliest-arrival J22209843_0 J222093345_0
 
   Journey set (1):
-    Journey 5555e3e3c020 (arrival: 07:41:00, trips: 2):
-      trip [129]:
+    Journey 35cd107483780a29 (arrival: 07:41:00, trips: 2, duration: 00:39:00):
+      trip [458]:
         from (dep at 07:02:00): 1:田代環境プラザ [J22209843_0]
         to (arr at 07:26:00): 20:島田駅 北口１番のりば [J222093340_1]
       footpath (time: 0:02:16):
         from: 島田駅 北口１番のりば [J222093340_1]
         to: 島田駅 北口２番のりば [J222093340_2]
-      trip [7]:
+      trip [26]:
         from (dep at 07:33:00): 38:島田駅 北口２番のりば [J222093340_2]
         to (arr at 07:41:00): 45:島田市民病院 [J222093345_0]
 
@@ -110,26 +110,23 @@ Example usage::
   % ./gtfs-tb-routing.py gtfs-shizuoka.pickle -c gtfs-shizuoka.cache \
       query-profile J22209723_0 J2220952426_0
 
-  Journey set (8):
+  Journey set (7):
 
-    Journey 555699453210 (arrival: 19:44:00, trips: 2):
-      trip [28]:
-        from (dep at 18:50:00): 10:小川 [J22209723_0]
-        to (arr at 19:33:00): 48:本通三丁目 [J222093339_0]
-      footpath (time: 0:02:10):
-        from: 本通三丁目 [J222093339_0]
-        to: 本通三丁目 [J222093339_1]
-      trip [115]:
-        from (dep at 19:37:00): 21:本通三丁目 [J222093339_1]
-        to (arr at 19:44:00): 28:ばらの丘一丁目 [J2220952426_0]
+    Journey 3387dfa2a4cb3956 (arrival: 08:43:00, trips: 2, duration: 01:23:00):
+      trip [174]:
+        from (dep at 07:20:00): 10:小川 [J22209723_0]
+        to (arr at 08:05:00): 49:島田駅 北口２番のりば [J222093340_2]
+      trip [341]:
+        from (dep at 08:35:00): 20:島田駅 北口２番のりば [J222093340_2]
+        to (arr at 08:43:00): 28:ばらの丘一丁目 [J2220952426_0]
 
-    Journey 555696d859b8 (arrival: 18:24:00, trips: 2):
-      trip [8]:
-        from (dep at 16:30:00): 10:小川 [J22209723_0]
-        to (arr at 17:15:00): 49:島田駅 北口２番のりば [J222093340_2]
-      trip [14]:
-        from (dep at 18:16:00): 20:島田駅 北口２番のりば [J222093340_2]
-        to (arr at 18:24:00): 28:ばらの丘一丁目 [J2220952426_0]
+    Journey 338759bc528596df (arrival: 10:53:00, trips: 2, duration: 02:33:00):
+      trip [54]:
+        from (dep at 08:20:00): 10:小川 [J22209723_0]
+        to (arr at 09:05:00): 49:島田駅 北口２番のりば [J222093340_2]
+      trip [94]:
+        from (dep at 10:45:00): 20:島田駅 北口２番のりば [J222093340_2]
+        to (arr at 10:53:00): 28:ばらの丘一丁目 [J2220952426_0]
   ...
 
 

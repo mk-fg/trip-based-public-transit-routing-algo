@@ -170,5 +170,3 @@ def dts_format(dts):
 	dts = str(datetime.time(dts // 3600, (dts % 3600) // 60, dts % 60, dts % 1))
 	if dts_days: dts = '{}+{}'.format(dts_days, dts)
 	return dts
-
-dts_wrap = lambda dts,_day=24*3600: (dts + _day) % _day

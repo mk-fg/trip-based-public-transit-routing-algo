@@ -246,13 +246,13 @@ def main(args=None):
 		dts_start = timetable.dts_parse(opts.day_time)
 		a, b = timetable.stops[opts.stop_from], timetable.stops[opts.stop_to]
 		journeys = router.query_earliest_arrival(a, b, dts_start)
-		journeys.pretty_print()
+		journeys.pretty_print(timetable.dts_format)
 
 	elif opts.call == 'query-profile':
 		dts_edt, dts_ldt = map(timetable.dts_parse, [opts.day_time_earliest, opts.day_time_latest])
 		a, b = timetable.stops[opts.stop_from], timetable.stops[opts.stop_to]
 		journeys = router.query_profile(a, b, dts_edt, dts_ldt, max_transfers=opts.max_transfers)
-		journeys.pretty_print()
+		journeys.pretty_print(timetable.dts_format)
 
 	elif opts.call == 'query-transfer-patterns':
 		dts_edt, dts_ldt = map(timetable.dts_parse, [opts.day_time_earliest, opts.day_time_latest])
@@ -275,7 +275,7 @@ def main(args=None):
 			return
 
 		journeys = tp_router.query_profile(a, b, dts_edt, dts_ldt, query_tree)
-		journeys.pretty_print()
+		journeys.pretty_print(timetable.dts_format)
 
 	else: parser.error('Action not implemented: {}'.format(opts.call))
 

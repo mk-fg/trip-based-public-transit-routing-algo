@@ -263,9 +263,18 @@ class Trips:
 	def __iter__(self): return iter(self.set_idx.values())
 
 
-@u.attr_struct(defaults=None)
+@u.attr_struct(slots=False, defaults=None)
 class TimespanInfo:
 	keys = 'dt_start dt_min service_days date_map date_min_str date_max_str'
+
+	_dts_start_cache = None
+	@property
+	def dts_start(self):
+		if self._dts_start_cache is not None: return self._dts_start_cache
+		self._dts_start_cache = 0 if not self.dt_min\
+			else (self.dt_start - self.dt_min).total_seconds()
+		return self._dts_start_cache
+
 
 @u.attr_struct
 class Timetable:
@@ -276,18 +285,21 @@ class Timetable:
 
 	def dts_relative(self, dts, dt=None):
 		if not self.timespan.dt_min: return dts
-		if not dt: dt = self.timespan.dt_start
+		if not dt: return self.timespan.dts_start + dts
 		return dts + (dt - self.timespan.dt_min).total_seconds()
 
 	def dts_parse(self, day_time_str, dt=None):
 		return self.dts_relative(u.dts_parse(day_time_str), dt)
+
+	def dts_format(self, dts):
+		return u.dts_format(dts - self.timespan.dts_start)
 
 
 
 ### TBRoutingEngine query result
 
 JourneyTrip = namedtuple('JTrip', 'ts_from ts_to')
-JourneyFp = namedtuple('JFootpath', 'stop_from stop_to dt')
+JourneyFp = namedtuple('JFootpath', 'stop_from stop_to delta')
 
 @u.attr_struct(slots=False, repr=False, cmp=False)
 class Journey:
@@ -310,9 +322,9 @@ class Journey:
 					if dts_dep is None: dts_dep = seg.ts_from.dts_dep - dts_dep_fp
 				elif isinstance(seg, JourneyFp):
 					fp_count += 1
-					dts_arr = dts_arr + seg.dt
+					dts_arr = dts_arr + seg.delta
 					hash_vals.append(seg)
-					if dts_dep is None: dts_dep_fp += seg.dt
+					if dts_dep is None: dts_dep_fp += seg.delta
 			if dts_dep is None: # no trips, only footpaths
 				dts_dep, dts_arr = self.dts_start, self.dts_start + dts_arr
 			self._stats_cache = self._stats_cache_t(
@@ -370,13 +382,15 @@ class Journey:
 					seg.stop_to, datetime.timedelta(seconds=int(seg.dt)) ))
 		return '<Journey[ {} ]>'.format(' - '.join(points))
 
-	def pretty_print(self, indent=0, **print_kws):
+	def pretty_print(self, dts_format_func=None, indent=0, **print_kws):
+		if not dts_format_func: dts_format_func = u.dts_format
 		p = lambda tpl,*a,**k: print(' '*indent + tpl.format(*a,**k), **print_kws)
 		stop_id_ext = lambda stop:\
 			' [{}]'.format(stop.id) if stop.id != stop.name else ''
 
-		p( 'Journey {:x} (arrival: {}, trips: {}):',
-			self.id, u.dts_format(self.dts_arr), self.trip_count )
+		p( 'Journey {:x} (arrival: {}, trips: {}, duration: {}):',
+			self.id, dts_format_func(self.dts_arr), self.trip_count,
+			u.dts_format(self.dts_arr - self.dts_dep) )
 		for seg in self.segments:
 			if isinstance(seg, JourneyTrip):
 				trip_id = seg.ts_from.trip.id
@@ -386,13 +400,13 @@ class Journey:
 				p( '    from (dep at {dts_dep}): {0.stopidx}:{0.stop.name}{stop_id}',
 					seg.ts_from,
 					stop_id=stop_id_ext(seg.ts_from.stop),
-					dts_dep=u.dts_format(seg.ts_from.dts_dep) )
+					dts_dep=dts_format_func(seg.ts_from.dts_dep) )
 				p( '    to (arr at {dts_arr}): {0.stopidx}:{0.stop.name}{stop_id}',
 					seg.ts_to,
 					stop_id=stop_id_ext(seg.ts_to.stop),
-					dts_arr=u.dts_format(seg.ts_to.dts_arr) )
+					dts_arr=dts_format_func(seg.ts_to.dts_arr) )
 			elif isinstance(seg, JourneyFp):
-				p('  footpath (time: {}):', datetime.timedelta(seconds=int(seg.dt)))
+				p('  footpath (time: {}):', datetime.timedelta(seconds=int(seg.delta)))
 				p('    from: {0.name}{stop_id}', seg.stop_from, stop_id=stop_id_ext(seg.stop_from))
 				p('    to: {0.name}{stop_id}', seg.stop_to, stop_id=stop_id_ext(seg.stop_to))
 
@@ -406,9 +420,9 @@ class JourneySet:
 	def __len__(self): return len(self.journeys)
 	def __iter__(self): return iter(self.journeys)
 
-	def pretty_print(self, indent=0, **print_kws):
+	def pretty_print(self, dts_format_func=None, indent=0, **print_kws):
 		print(' '*indent + 'Journey set ({}):'.format(len(self.journeys)))
 		for journey in sorted( self.journeys,
 				key=op.attrgetter('dts_dep', 'dts_arr', 'dts_start', 'id') ):
 			print()
-			journey.pretty_print(indent=indent+2, **print_kws)
+			journey.pretty_print(dts_format_func=dts_format_func, indent=indent+2, **print_kws)
