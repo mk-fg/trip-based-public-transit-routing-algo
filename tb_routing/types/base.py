@@ -1,6 +1,7 @@
 ### TBRoutingEngine internal types - base: lines, transfers, graph
 
 import itertools as it, operator as op, functools as ft
+from collections import namedtuple
 import struct, array
 
 from .. import utils as u
@@ -234,3 +235,6 @@ class QueryResult:
 	n = u.attr_init()
 	jtrips = u.attr_init()
 	dts_dep = u.attr_init(0)
+
+
+StopLabel = namedtuple('StopLabel', 'dts_dep dts_arr ts_list') # dts_dep -> ts_list -> dts_arr

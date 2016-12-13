@@ -393,10 +393,8 @@ class TBRoutingEngine:
 			timetable.footpaths, stop_src, stop_dst, dts_edt, results )
 
 
-	@timer
-	def build_tp_tree(self, max_transfers=15):
-		'''Run all-to-all profile queries to build Transfer-Patterns
-			prefix-tree of stop_src-to-stop_dst Line connections.'''
+	def query_profile_all_to_all(self, max_transfers=15):
+		'Run all-to-all profile query, yielding (stop_src, stop_labels) tuples.'
 		# To avoid duplicating paper-1 algos' weird naming/types here:
 		#  R -> trip_labels: Mapping[(n, Trip), int]
 		#  Q -> queue: Sequence[TripSegment] (no point using Q-mapping here)
@@ -405,11 +403,9 @@ class TBRoutingEngine:
 
 		DepartureCriteriaCheck = namedtuple('DCCheck', 'trip stopidx dts_src ts_list')
 		TripSegment = namedtuple('TripSeg', 'trip stopidx_a stopidx_b ts_list')
-		StopLabel = namedtuple('StopLabel', 'dts_dep dts_arr ts_list') # dts_dep -> ts_list -> dts_arr
 		StopLabelSet = ft.partial( t.pareto.ParetoSet,
 			lambda v: (v.dts_arr, len(v.ts_list) - 1, v.dts_dep) )
 
-		tree = t.tp.TPTree() # adj-lists, with nodes being either Stop or Line objects
 		stop_labels = dict() # {stop: ts_list (all TripStops on the way from stop_src to stop)}
 		trip_tails_checked = dict() # {trip: earliest_checked_stopidx}
 
@@ -423,17 +419,7 @@ class TBRoutingEngine:
 				i_min = min(i, trip_tails_checked.get((n, trip_u), i_max))
 				for m in range(n, max_transfers+1): trip_tails_checked[m, trip_u] = i_min
 
-		subtree_stats = Counter()
-		progress = self.progress_iter('transfer-patterns', len(timetable.stops))
 		for stop_src in timetable.stops:
-			means = subtree_stats['count']
-			if means == 0: means = [0, 0, 0]
-			else: means = list(int(subtree_stats[k] / means) for k in ['nodes', 'depth', 'dst'])
-			progress.send([
-				'tree-nodes={:,} (unique={:,}),'
-					' subtree means: nodes={:,} depth={:,} breadth/dst-count={:,}',
-				sum(tree.stats.total.values()), len(tree.stats.total) ] + means)
-
 			stop_labels.clear()
 			trip_tails_checked.clear()
 
@@ -467,18 +453,36 @@ class TBRoutingEngine:
 								if fp_delta is None: continue
 								stop_q_arr = ts.dts_arr + fp_delta
 								if stop_q not in stop_labels: stop_labels[stop_q] = StopLabelSet()
-								stop_labels[stop_q].add(StopLabel(dts_src, stop_q_arr, ts_list))
+								stop_labels[stop_q].add(t.base.StopLabel(dts_src, stop_q_arr, ts_list))
 
 							for transfer in transfers.from_trip_stop(ts):
 								enqueue(transfer.ts_to.trip, transfer.ts_to.stopidx, ts_list)
+
+			yield stop_src, stop_labels
+
+	@timer
+	def build_tp_tree(self, **query_kws):
+		'''Run all-to-all profile query to build Transfer-Patterns
+			prefix-tree of stop_dst->stop_src Line connections.'''
+		timetable, lines, transfers = self.graph
+
+		tree = t.tp.TPTree() # adj-lists, with nodes being either Stop or Line objects
+		subtree_stats = Counter()
+
+		progress = self.progress_iter('transfer-patterns', len(timetable.stops))
+		for stop_src, stop_labels in self.query_profile_all_to_all(**query_kws):
+			means = subtree_stats['count']
+			if means == 0: means = [0, 0, 0]
+			else: means = list(int(subtree_stats[k] / means) for k in ['nodes', 'depth', 'dst'])
+			progress.send([
+				'tree-nodes={:,} (unique={:,}),'
+					' subtree means: nodes={:,} depth={:,} breadth/dst-count={:,}',
+				sum(tree.stats.total.values()), len(tree.stats.total) ] + means)
 
 			subtree, subtree_depth = tree[stop_src], list()
 			node_src = subtree.node(stop_src, t='src')
 			for stop_dst, sl_set in stop_labels.items():
 				node_dst = subtree.node(stop_dst)
-				if stop_dst == stop_src:
-					node_prev.edges_to.add(node_src)
-					continue
 				for sl in sl_set:
 					node, depth = node_dst, 0
 					for ts in reversed(sl.ts_list):
