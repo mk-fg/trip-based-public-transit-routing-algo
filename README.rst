@@ -380,6 +380,32 @@ See ``-h/--help`` output for the script and relevant subcommands for more of the
 
 
 
+Missing things
+--------------
+
+- Transfer Patterns tree storage optimization ("Splitting Trees") as per
+  `arXiv:1607.01299v2`_ paper.
+
+  Proved to be rather difficult to implement in a more-or-less comprehensible
+  fashion, complicates code quite a lot, is rather boring and slows down the
+  actual queries, hence somewhat dubious.
+
+- Profile queries using query trees can probably benefit from optimizations
+  described in "Multi-criteria Shortest Paths in Time-Dependent Train Networks"
+  paper.
+
+- Some additional data from GTFS can be used, e.g. frequences.txt and names for
+  services/trips/lines for more comprehensible results and easier introspection.
+
+- Storing data in some db instead of memory and loading it selectively seem to
+  be the most obvious practical optimization.
+
+- Some interactive querying interface for long-running instance (e.g. webui or
+  ipynb) can be useful for all kinds of experiments, in addition to existing
+  caching code.
+
+
+
 Links
 -----
 
