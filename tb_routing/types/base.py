@@ -120,7 +120,7 @@ class Lines:
 
 	def line_for_trip(self, trip): return self.idx_trip[trip]
 
-	_dump_prefix, _dump_t, _dump_sep = '>I', 'H', 2**16-1
+	_dump_prefix, _dump_t, _dump_sep = '>I', 'I', 2**32-1
 
 	def dump(self, stream):
 		dump = array.array(self._dump_t)
@@ -180,7 +180,7 @@ class TransferSet:
 		k1 = ts.trip.id, ts.stopidx
 		return self.set_idx.get(k1, dict()).values()
 
-	_dump_fmt = '>HBHBfI'
+	_dump_fmt = '>IBIBfI'
 
 	def dump(self, stream):
 		chunk_iter = (
