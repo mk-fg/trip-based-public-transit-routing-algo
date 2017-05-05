@@ -204,7 +204,7 @@ def main(args=None):
 
 	tt_path = Path(opts.gtfs_dir_or_pickle)
 	cache_path = opts.cache_precalc and Path(opts.cache_precalc)
-	if not tt_path.is_file() and cache_path and cache_path.is_file():
+	if opts.call != 'cache' and (not tt_path.is_file() and cache_path and cache_path.is_file()):
 		parser.error( 'Pre-generated --cache-precalc dump can only'
 			' be used with cached timetable (see --cache-timetable option).' )
 
