@@ -290,15 +290,15 @@ def parse_timetable(gtfs_dir, conf):
 		# links.txt is specific to gbrail.info and has
 		#  transfers that are only valid for specific date/time intervals
 		for s in iter_gtfs_tuples(gtfs_dir, 'links', empty_if_missing=True):
-			if timespan_info.dt_start:
-				if ( s.start_date > timespan_info.date_max_str
-					or s.end_date < timespan_info.date_min_str ): continue
-				days = timespan_info.date_map.values()
-			else: days = {None: None}
 			stops_from, stops_to = map(get_stop_set, [s.from_stop_id, s.to_stop_id])
 			if not (stops_from and stops_to): continue
 			delta = int(s.link_secs)
-			for dt in days:
+			if not timespan_info.dt_start: # not using calendar info
+				fp_add(stop_from, stop_to, delta)
+				continue
+			if ( s.start_date > timespan_info.date_max_str
+				or s.end_date < timespan_info.date_min_str ): continue
+			for dt in timespan_info.date_map.values():
 				if not bool(int(getattr(s, weekday_columns[dt.weekday()]))): continue
 				dts_min, dts_max = (
 					offset_to_dts(timespan_info.dt_min, dt, GTFSTimeOffset.parse(v))
