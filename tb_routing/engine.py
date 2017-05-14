@@ -295,11 +295,13 @@ class TBRoutingEngine:
 
 
 	@timer
-	def query_profile(self, stop_src, stop_dst, dts_edt, dts_ldt, max_transfers=15):
+	def query_profile(self, stop_src, stop_dst, dts_edt=None, dts_ldt=None, max_transfers=15):
 		'''Profile query, returning a list of pareto-optimal JourneySet results with Journeys
 				from stop_src to stop_dst, with departure at stop_src in a day-time (dts) interval
 				from dts_edt (earliest departure time) to dts_ldt (latest).'''
 		timetable, lines, transfers = self.graph
+		if dts_edt is None: dts_edt = timetable.dts_parse('00:00')
+		if dts_ldt is None: dts_ldt = timetable.dts_parse('24:00')
 
 		DepartureCriteriaCheck = namedtuple('DCCheck', 'trip stopidx dts_src journey')
 		TripSegment = namedtuple('TripSeg', 'trip stopidx_a stopidx_b journey')

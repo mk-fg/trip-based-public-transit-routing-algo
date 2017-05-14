@@ -145,6 +145,42 @@ Use ``--debug`` option to see pre-calculation progress (useful for large dataset
 and misc other stats and logging.
 
 
+Python REPL (and IPython/Jupyter)
+`````````````````````````````````
+
+It'd probably make sense to generate graph cache beforehand, i.e. by running::
+
+  % ./gtfs-tb-routing.py \
+    gtfs-gbrail --stops-as-stations --debug --day 2017-05-13 \
+    --cache-timetable gtfs-gbrail.pickle --cache-precalc gtfs-gbrail.cache cache
+
+That will create "gtfs-gbrail.pickle" and "gtfs-gbrail.cache" files from source
+data, which take much less time to load than building whole graph from GTFS (for
+circa-2017 gbrain.info data on pypy 3.3 and circa-2012 desktop it takes ~30min).
+
+Be sure to run the REPL in the project dir or have tb_routing importable there
+in some other fashion.
+
+::
+
+  Python 3.3.5 (ea9979b550eeae87924dc4bef06070e8f8d0e22f, Oct 12 2016, 11:31:15)
+  [PyPy 5.5.0-alpha0 with GCC 6.2.1 20160830] on linux
+  Type "help", "copyright", "credits" or "license" for more information.
+  And now for something completely different: ``apparently confusion is a
+  feature''
+
+  >>>> import tb_routing as tb
+  >>>> tt, r = tb.init_gtfs_router('gtfs-gbrail.pickle', 'gtfs-gbrail.cache')
+  >>>> journeys = r.query_profile('DIS', 'WWW')
+  >>>> journeys
+  ...
+  >>>> journeys.pretty_print()
+  ...
+
+This should allow for easier tinkering, without needing to reload data caches on
+every query.
+
+
 Routing engine
 ``````````````
 
