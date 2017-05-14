@@ -2,7 +2,7 @@
 
 import itertools as it, operator as op, functools as ft
 from pathlib import Path
-import os, sys, time
+import os, sys, time, re
 
 import tb_routing as tb
 
@@ -209,12 +209,15 @@ def main(args=None):
 			' be used with cached timetable (see --cache-timetable option).' )
 
 	day = opts.day
-	if day and not (day.isdigit() and len(day) == 8):
-		import subprocess
-		proc = subprocess.Popen(['date', '-d', day, '+%Y%m%d'], stdout=subprocess.PIPE)
-		day = proc.stdout.read().decode().strip()
-		if proc.wait() != 0: parser.error('"date -d" failed to parse --day value: {!r}'.format(day))
-		log.debug('Parsed --day value via "date -d" subprocess: {!r} -> {}', opts.day, day)
+	if day:
+		m = re.search(r'^\s*(\d{4})\s*-\s*(\d{2})\s*-\s*(\d{2})\s*$', day)
+		if m: day = ''.join(m.groups())
+		if not (day.isdigit() and len(day) == 8):
+			import subprocess
+			proc = subprocess.Popen(['date', '-d', day, '+%Y%m%d'], stdout=subprocess.PIPE)
+			day = proc.stdout.read().decode().strip()
+			if proc.wait() != 0: parser.error('"date -d" failed to parse --day value: {!r}'.format(day))
+			log.debug('Parsed --day value via "date -d" subprocess: {!r} -> {}', opts.day, day)
 
 	if opts.stops_to_stations: conf.group_stops_into_stations = True
 	if opts.engine_conf:
