@@ -60,8 +60,9 @@ def jtrips_to_journeys(footpaths, stop_src, stop_dst, dts_src, results):
 						jn.append_fp(ts1.stop, ts2.stop, fp_delta)
 						queue.append(JourneySoFar(ts2, jn, jsf.prio + fp_delta))
 
-		best_jsf = min(queue, key=op.attrgetter('prio'))
-		journeys.add(best_jsf.journey)
+		if queue:
+			best_jsf = min(queue, key=op.attrgetter('prio'))
+			journeys.add(best_jsf.journey)
 
 	return journeys
 
