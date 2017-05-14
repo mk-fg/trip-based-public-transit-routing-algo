@@ -512,7 +512,7 @@ class TBTPRoutingEngine:
 	graph = tree = None
 
 	def __init__(self, graph, tp_tree, conf=None, timer_func=None):
-		self.conf, self.log = conf or EngineConf(), u.get_logger('tb-tp')
+		self.conf, self.log = conf or EngineConf(), u.get_logger('tb.tp')
 		self.graph, self.tree = graph, tp_tree
 		self.timer_wrapper = timer_func if timer_func else lambda f,*a,**k: f(*a,**k)
 		self.jtrips_to_journeys = ft.partial(self.timer_wrapper, jtrips_to_journeys)

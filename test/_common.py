@@ -3,15 +3,13 @@ from collections import ChainMap, Mapping, OrderedDict, defaultdict
 from pathlib import Path
 from pprint import pprint
 import os, sys, unittest, types, datetime, re, math
-import runpy, tempfile, warnings, shutil, zipfile
+import tempfile, warnings, shutil, zipfile
 
 import yaml # PyYAML module is required for tests
 
 path_project = Path(__file__).parent.parent
 sys.path.insert(1, str(path_project))
 import tb_routing as tb
-gtfs_cli = type( 'FakeModule', (object,),
-	runpy.run_path(str(path_project / 'gtfs-tb-routing.py'), run_name='gtfs-tb-routing') )
 
 verbose = os.environ.get('TB_DEBUG')
 if verbose:
@@ -171,7 +169,7 @@ class GTFSTestFixture:
 
 
 	def _paths_src_mtimes(self):
-		paths_src = [Path(tb.__file__).parent, Path(gtfs_cli.__file__)]
+		paths_src = [Path(tb.__file__).parent, path_project]
 		for root, dirs, files in it.chain.from_iterable(os.walk(str(p)) for p in paths_src):
 			p = Path(root)
 			for name in files: yield (p / name).stat().st_mtime

@@ -17,8 +17,8 @@ class GTFS_Shizuoka_20161013(unittest.TestCase):
 		tt_path, tt_path_dump = cls.fx.path_timetable, None
 		if not tt_path.exists(): tt_path, tt_path_dump = cls.fx.path_unzip, tt_path
 
-		cls.timetable, cls.router = c.gtfs_cli.init_gtfs_router(
-			tt_path, cls.fx.path_cache, tt_path_dump, timer_func=c.gtfs_cli.calc_timer )
+		cls.timetable, cls.router = c.tb.init_gtfs_router(
+			tt_path, cls.fx.path_cache, tt_path_dump, timer_func=c.tb.calc_timer )
 		cls.checks = c.GraphAssertions(cls.router.graph)
 
 	@classmethod
