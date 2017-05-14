@@ -135,8 +135,11 @@ a specific day and its vicinity) and precalculation result (lines, transfer set)
 to avoid doing that for every subsequent query.
 
 Queries above do not use calendar data, i.e. all trips from the timetable are
-considered to be valid. To use calendar data, use ``-d/--day``, ``--parse-days``
-and ``--parse-days-pre`` options.
+considered to be valid.
+
+To use calendar data, **always specify -d/--day** (and maybe ``--parse-days``
+and ``--parse-days-pre`` options) when building graph - i.e. "cache" command, or
+when running query without cache opts.
 
 Use ``--debug`` option to see pre-calculation progress (useful for large datasets)
 and misc other stats and logging.
